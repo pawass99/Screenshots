@@ -1,9 +1,11 @@
 {
 	"servers": {
-		"my-mcp-server-c01091eb": {
-			"url": " http://127.0.0.1:3845/mcp",
+		"my-mcp-server-67a162ca": {
+			"url": "http://127.0.0.1:3845/mcp",
 			"type": "http"
 		}
 	},
 	"inputs": []
+
+	// Jangan di apa apain dulu ni, biar integrasi sama figma
 }
