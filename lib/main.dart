@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'screens/splash.dart';
+import 'screens/login.dart';
 
 void main() {
   runApp(const MainApp());
@@ -18,6 +19,10 @@ class MainApp extends StatelessWidget {
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: const SplashScreen(),
+      routes: {
+        '/splash': (context) => const SplashScreen(),
+        '/login': (context) => const LoginScreen(),
+      },
     );
   }
 }
