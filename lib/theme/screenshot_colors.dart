@@ -4,7 +4,7 @@ class ScreenshotColors {
   const ScreenshotColors._();
 
   static const background = Color(0xFF17130F);
-  static const deepestSurface = Color(0xFF110E0A);
+  static const deepestSurface = Color(0xFF111112);
   static const surfaceLow = Color(0xFF1F1B17);
   static const surface = Color(0xFF231F1B);
   static const surfaceHigh = Color(0xFF2E2925);
