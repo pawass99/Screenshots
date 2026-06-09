@@ -10,11 +10,11 @@ class ArchiveBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: const BoxDecoration(
-        color: ScreenshotColors.background,
+        color: ScreenshotColors.deepestSurface,
         gradient: RadialGradient(
           center: Alignment(0.72, -1.08),
           radius: 1.2,
-          colors: [Color(0x222E2925), ScreenshotColors.background],
+          colors: [Color(0x22111112), ScreenshotColors.deepestSurface],
         ),
       ),
       child: child,
