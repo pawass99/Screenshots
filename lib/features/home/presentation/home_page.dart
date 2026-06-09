@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:screenshots/features/movie_detail/presentation/movie_detail_page.dart';
+import 'package:screenshots/features/profile/presentation/profile_page.dart';
 import 'package:screenshots/features/scene_detail/presentation/scene_detail_page.dart';
 import 'package:screenshots/models/film.dart';
 import 'package:screenshots/models/scene.dart';
@@ -160,7 +161,7 @@ class _HomePageState extends State<HomePage> {
                         onTagChanged: (tag) => setState(() => _savedTag = tag),
                         onOpenScene: (scene) => _openScene(scene, data),
                       ),
-                      _ProfilePage(
+                      ProfilePage(
                         films: data.films,
                         scenes: data.scenes,
                         savedCount: _effectiveSavedSceneIds(data.scenes).length,
@@ -416,75 +417,6 @@ class _SavedPage extends StatelessWidget {
                   data: data,
                   onOpenScene: onOpenScene,
                 ),
-            ],
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 112)),
-      ],
-    );
-  }
-}
-
-class _ProfilePage extends StatelessWidget {
-  const _ProfilePage({
-    required this.films,
-    required this.scenes,
-    required this.savedCount,
-  });
-
-  final List<Film> films;
-  final List<Scene> scenes;
-  final int savedCount;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        const SliverToBoxAdapter(
-          child: ArchiveTopBar(title: 'Archive Profile'),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: ScreenshotSpacing.mobileMargin,
-          ),
-          sliver: SliverList.list(
-            children: [
-              const SizedBox(height: ScreenshotSpacing.lg),
-              Text(
-                'Private index',
-                style: ScreenshotTypography.archiveDisplayTitle.copyWith(
-                  fontSize: 38,
-                  height: 1,
-                ),
-              ),
-              const SizedBox(height: ScreenshotSpacing.md),
-              Text(
-                'A quiet record of films, frames, and saved visual references.',
-                style: ScreenshotTypography.bodyMedium,
-              ),
-              const SizedBox(height: ScreenshotSpacing.xxl),
-              Row(
-                children: [
-                  _ProfileMetric(
-                    label: 'MOVIES',
-                    value: films.length.toString(),
-                  ),
-                  const SizedBox(width: ScreenshotSpacing.sm),
-                  _ProfileMetric(
-                    label: 'FRAMES',
-                    value: scenes.length.toString(),
-                  ),
-                  const SizedBox(width: ScreenshotSpacing.sm),
-                  _ProfileMetric(label: 'SAVED', value: savedCount.toString()),
-                ],
-              ),
-              const _ArchiveSectionTitle(
-                title: 'Composition Notes',
-                meta: 'Local',
-              ),
-              const _InlineArchiveMessage(
-                'Profile actions and account settings can be connected later without changing the archive shell.',
-              ),
             ],
           ),
         ),
@@ -953,37 +885,6 @@ class _InlineArchiveMessage extends StatelessWidget {
           style: ScreenshotTypography.metadata.copyWith(
             color: ScreenshotColors.onSurfaceVariant,
             letterSpacing: 0,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileMetric extends StatelessWidget {
-  const _ProfileMetric({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0x12EAE1DA),
-          border: Border.all(color: ScreenshotColors.outlineVariant),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(ScreenshotSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value, style: ScreenshotTypography.smallHeadline),
-              const SizedBox(height: ScreenshotSpacing.xs),
-              Text(label, style: ScreenshotTypography.labelCaps),
-            ],
           ),
         ),
       ),
