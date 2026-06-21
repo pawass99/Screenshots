@@ -1,9 +1,12 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:screenshots/features/movie_detail/presentation/movie_detail_page.dart';
+import 'package:screenshots/features/profile/presentation/profile_page.dart';
 import 'package:screenshots/features/scene_detail/presentation/scene_detail_page.dart';
 import 'package:screenshots/models/film.dart';
 import 'package:screenshots/models/scene.dart';
+import 'package:screenshots/navigation/archive_page_route.dart';
 import 'package:screenshots/services/film_service.dart';
 import 'package:screenshots/services/scene_service.dart';
 import 'package:screenshots/theme/screenshot_colors.dart';
@@ -74,7 +77,7 @@ class _HomePageState extends State<HomePage> {
 
   void _openMovie(Film film, List<Scene> scenes) {
     Navigator.of(context).push(
-      MaterialPageRoute(
+      ArchivePageRoute(
         builder: (_) => MovieDetailPage(film: film, scenes: scenes),
       ),
     );
@@ -84,7 +87,7 @@ class _HomePageState extends State<HomePage> {
     final related = _relatedScenes(scene, data.scenes);
 
     Navigator.of(context).push(
-      MaterialPageRoute(
+      ArchivePageRoute(
         builder: (_) => SceneDetailPage(
           scene: scene,
           film: data.filmForScene(scene),
@@ -107,7 +110,7 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: ScreenshotColors.background,
+      backgroundColor: ScreenshotColors.deepestSurface,
       body: ArchiveBackground(
         child: SafeArea(
           bottom: false,
@@ -158,7 +161,7 @@ class _HomePageState extends State<HomePage> {
                         onTagChanged: (tag) => setState(() => _savedTag = tag),
                         onOpenScene: (scene) => _openScene(scene, data),
                       ),
-                      _ProfilePage(
+                      ProfilePage(
                         films: data.films,
                         scenes: data.scenes,
                         savedCount: _effectiveSavedSceneIds(data.scenes).length,
@@ -235,7 +238,6 @@ class _DiscoveryPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final heroFilm = _firstFilmWithHeroImage(data.films);
     final filteredScenes = _filterScenes(
       data.scenes,
       queryController.text,
@@ -244,14 +246,11 @@ class _DiscoveryPage extends StatelessWidget {
 
     return CustomScrollView(
       slivers: [
+        const SliverToBoxAdapter(child: _HomeLogoTopBar()),
         SliverToBoxAdapter(
-          child: ArchiveTopBar(
-            title: 'Screenshot',
-            trailing: ArchiveIconButton(
-              icon: Icons.person_outline_rounded,
-              semanticLabel: 'Open profile',
-              onPressed: () {},
-            ),
+          child: _HeroArchiveCarousel(
+            films: _heroFilms(data.films),
+            onOpenMovie: (film) => onOpenMovie(film, data.scenesForFilm(film)),
           ),
         ),
         SliverPadding(
@@ -260,12 +259,6 @@ class _DiscoveryPage extends StatelessWidget {
           ),
           sliver: SliverList.list(
             children: [
-              _HeroArchiveCard(
-                film: heroFilm,
-                onTap: heroFilm == null
-                    ? null
-                    : () => onOpenMovie(heroFilm, data.scenesForFilm(heroFilm)),
-              ),
               const SizedBox(height: ScreenshotSpacing.md),
               ArchiveSearchBox(
                 controller: queryController,
@@ -278,7 +271,7 @@ class _DiscoveryPage extends StatelessWidget {
                 selectedTag: selectedTag,
                 onTagChanged: onTagChanged,
               ),
-              const _ArchiveSectionTitle(title: 'Shelf Notes', meta: 'Swipe'),
+              const _ArchiveSectionTitle(title: 'Our Films', meta: 'Swipe'),
               if (data.films.isEmpty)
                 const _InlineArchiveMessage('No movie records yet.')
               else
@@ -433,71 +426,33 @@ class _SavedPage extends StatelessWidget {
   }
 }
 
-class _ProfilePage extends StatelessWidget {
-  const _ProfilePage({
-    required this.films,
-    required this.scenes,
-    required this.savedCount,
-  });
-
-  final List<Film> films;
-  final List<Scene> scenes;
-  final int savedCount;
+class _HomeLogoTopBar extends StatelessWidget {
+  const _HomeLogoTopBar();
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      slivers: [
-        const SliverToBoxAdapter(
-          child: ArchiveTopBar(title: 'Archive Profile'),
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: ScreenshotSpacing.mobileMargin,
+        top: 2,
+        right: ScreenshotSpacing.mobileMargin,
+        bottom: 2,
+      ),
+      // Membuat header home dengan logo vector Screenshot.
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          minHeight: ScreenshotSpacing.tapTarget,
         ),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: ScreenshotSpacing.mobileMargin,
-          ),
-          sliver: SliverList.list(
-            children: [
-              const SizedBox(height: ScreenshotSpacing.lg),
-              Text(
-                'Private index',
-                style: ScreenshotTypography.archiveDisplayTitle.copyWith(
-                  fontSize: 38,
-                  height: 1,
-                ),
-              ),
-              const SizedBox(height: ScreenshotSpacing.md),
-              Text(
-                'A quiet record of films, frames, and saved visual references.',
-                style: ScreenshotTypography.bodyMedium,
-              ),
-              const SizedBox(height: ScreenshotSpacing.xxl),
-              Row(
-                children: [
-                  _ProfileMetric(
-                    label: 'MOVIES',
-                    value: films.length.toString(),
-                  ),
-                  const SizedBox(width: ScreenshotSpacing.sm),
-                  _ProfileMetric(
-                    label: 'FRAMES',
-                    value: scenes.length.toString(),
-                  ),
-                  const SizedBox(width: ScreenshotSpacing.sm),
-                  _ProfileMetric(label: 'SAVED', value: savedCount.toString()),
-                ],
-              ),
-              const _ArchiveSectionTitle(
-                title: 'Composition Notes',
-                meta: 'Local',
-              ),
-              const _InlineArchiveMessage(
-                'Profile actions and account settings can be connected later without changing the archive shell.',
-              ),
-            ],
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: SvgPicture.asset(
+            'assets/images/screenshot_wordmark.svg',
+            width: 168,
+            height: 11,
+            semanticsLabel: 'SCREENSHOT',
           ),
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 112)),
-      ],
+      ),
     );
   }
 }
@@ -510,13 +465,19 @@ class _HeroArchiveCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final heroHeight = (MediaQuery.sizeOf(context).width * 0.92).clamp(
+      330.0,
+      430.0,
+    );
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: AspectRatio(
-        aspectRatio: 1.34,
+      child: SizedBox(
+        width: double.infinity,
+        height: heroHeight,
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -526,7 +487,13 @@ class _HeroArchiveCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [Color(0x22000000), Color(0xCC000000)],
+                    colors: [
+                      Color(0x08000000),
+                      Color(0x11000000),
+                      Color(0xDD111112),
+                      ScreenshotColors.deepestSurface,
+                    ],
+                    stops: [0, 0.46, 0.82, 1],
                   ),
                 ),
               ),
@@ -563,6 +530,88 @@ class _HeroArchiveCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HeroArchiveCarousel extends StatefulWidget {
+  const _HeroArchiveCarousel({required this.films, required this.onOpenMovie});
+
+  final List<Film> films;
+  final ValueChanged<Film> onOpenMovie;
+
+  @override
+  State<_HeroArchiveCarousel> createState() => _HeroArchiveCarouselState();
+}
+
+class _HeroArchiveCarouselState extends State<_HeroArchiveCarousel> {
+  late final PageController _controller;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.films.isEmpty) {
+      return const _HeroArchiveCard(film: null, onTap: null);
+    }
+
+    // Membuat hero editor's frame yang bisa digeser horizontal.
+    return Column(
+      children: [
+        SizedBox(
+          height: (MediaQuery.sizeOf(context).width * 0.92).clamp(330.0, 430.0),
+          child: PageView.builder(
+            controller: _controller,
+            physics: const BouncingScrollPhysics(),
+            itemCount: widget.films.length,
+            onPageChanged: (index) => setState(() => _index = index),
+            itemBuilder: (context, index) {
+              final film = widget.films[index];
+              return _HeroArchiveCard(
+                film: film,
+                onTap: () => widget.onOpenMovie(film),
+              );
+            },
+          ),
+        ),
+        if (widget.films.length > 1) ...[
+          const SizedBox(height: ScreenshotSpacing.xs),
+          // Membuat indikator posisi hero carousel.
+          Semantics(
+            label: 'Hero frame ${_index + 1} of ${widget.films.length}',
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                widget.films.length,
+                (index) => AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  width: index == _index ? 18 : 6,
+                  height: 6,
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
+                    color: index == _index
+                        ? ScreenshotColors.onSurface
+                        : ScreenshotColors.onSurface.withValues(alpha: 0.28),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -843,37 +892,6 @@ class _InlineArchiveMessage extends StatelessWidget {
   }
 }
 
-class _ProfileMetric extends StatelessWidget {
-  const _ProfileMetric({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: const Color(0x12EAE1DA),
-          border: Border.all(color: ScreenshotColors.outlineVariant),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(ScreenshotSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value, style: ScreenshotTypography.smallHeadline),
-              const SizedBox(height: ScreenshotSpacing.xs),
-              Text(label, style: ScreenshotTypography.labelCaps),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _Badge extends StatelessWidget {
   const _Badge({required this.label});
 
@@ -1004,14 +1022,11 @@ class _HomeEmptyState extends StatelessWidget {
   }
 }
 
-Film? _firstFilmWithHeroImage(List<Film> films) {
-  for (final film in films) {
-    if (film.hasHeroImage) {
-      return film;
-    }
-  }
+List<Film> _heroFilms(List<Film> films) {
+  final withHero = films.where((film) => film.hasHeroImage).toList();
+  final withoutHero = films.where((film) => !film.hasHeroImage).toList();
 
-  return films.isEmpty ? null : films.first;
+  return [...withHero, ...withoutHero];
 }
 
 List<Scene> _filterScenes(List<Scene> scenes, String query, String tag) {

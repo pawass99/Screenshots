@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:screenshots/features/auth/presentation/login_page.dart';
 import 'package:screenshots/features/home/presentation/home_page.dart';
 import 'package:screenshots/navigation/archive_page_route.dart';
 import 'package:screenshots/services/auth_service.dart';
-import 'package:screenshots/theme/screenshot_colors.dart';
-import 'package:screenshots/theme/screenshot_spacing.dart';
-import 'package:screenshots/theme/screenshot_typography.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -16,6 +14,8 @@ class SplashPage extends StatefulWidget {
 
 class _SplashPageState extends State<SplashPage>
     with SingleTickerProviderStateMixin {
+  static const _splashBackground = Color(0xFF111112);
+
   final AuthService _authService = const AuthService();
   late final AnimationController _controller;
   late final Animation<double> _opacity;
@@ -59,15 +59,12 @@ class _SplashPageState extends State<SplashPage>
     final disableMotion = MediaQuery.disableAnimationsOf(context);
 
     return Scaffold(
-      backgroundColor: ScreenshotColors.background,
+      backgroundColor: _splashBackground,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(ScreenshotSpacing.mobileMargin),
-          child: Center(
-            child: disableMotion
-                ? const _SplashMark()
-                : FadeTransition(opacity: _opacity, child: const _SplashMark()),
-          ),
+        child: Center(
+          child: disableMotion
+              ? const _SplashMark()
+              : FadeTransition(opacity: _opacity, child: const _SplashMark()),
         ),
       ),
     );
@@ -79,24 +76,18 @@ class _SplashMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'SCREENSHOT',
-          style: ScreenshotTypography.smallHeadline.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: 1.8,
-          ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 22),
+      // Membuat wordmark utama splash screen.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: SvgPicture.asset(
+          'assets/images/screenshot_wordmark.svg',
+          width: 369,
+          height: 24,
+          semanticsLabel: 'SCREENSHOT',
         ),
-        const SizedBox(height: ScreenshotSpacing.sm),
-        Text(
-          'PRIVATE CINEMATIC ARCHIVE',
-          style: ScreenshotTypography.labelCaps.copyWith(
-            color: ScreenshotColors.primary,
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

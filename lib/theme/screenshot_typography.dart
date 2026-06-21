@@ -6,6 +6,9 @@ class ScreenshotTypography {
 
   static const serifDisplayFamily = 'DMSerifDisplay';
   static const headlineSerifFamily = 'CormorantGaramond';
+  static const splashWordmarkFamily = 'FutureTense';
+  static const authHeaderFamily = 'Coolvetica';
+  static const authBodyFamily = 'Montserrat';
 
   static const largeDisplay = TextStyle(
     color: ScreenshotColors.onSurface,
@@ -105,5 +108,78 @@ class ScreenshotTypography {
     fontWeight: FontWeight.w700,
     letterSpacing: 0,
     height: 0.98,
+  );
+
+  static const splashWordmark = TextStyle(
+    color: Colors.white,
+    fontFamily: splashWordmarkFamily,
+    fontSize: 54,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0,
+    height: 1,
+  );
+
+  static const signInWelcome = TextStyle(
+    color: Colors.white,
+    fontFamily: authHeaderFamily,
+    fontSize: 48,
+    fontWeight: FontWeight.w200,
+    letterSpacing: 0,
+    height: 1,
+  );
+
+  static const signInTitle = TextStyle(
+    color: Colors.black,
+    fontFamily: authBodyFamily,
+    fontSize: 42,
+    fontWeight: FontWeight.w300,
+    letterSpacing: 0,
+    height: 1.05,
+  );
+
+  static const signInFieldLabel = TextStyle(
+    color: Colors.black,
+    fontFamily: authBodyFamily,
+    fontSize: 15,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0,
+    height: 1.2,
+  );
+
+  static const signInFieldInput = TextStyle(
+    color: Colors.black,
+    fontFamily: authBodyFamily,
+    fontSize: 17,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.2,
+  );
+
+  static const signInFieldHint = TextStyle(
+    color: Color(0xFF343434),
+    fontFamily: authBodyFamily,
+    fontSize: 15,
+    fontStyle: FontStyle.normal,
+    fontWeight: FontWeight.w300,
+    letterSpacing: 0,
+    height: 1.2,
+  );
+
+  static const signInButton = TextStyle(
+    color: Color(0xFFEDEDED),
+    fontFamily: authBodyFamily,
+    fontSize: 28,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0,
+    height: 1,
+  );
+
+  static const signInFooter = TextStyle(
+    color: Colors.black,
+    fontFamily: authBodyFamily,
+    fontSize: 15,
+    fontWeight: FontWeight.w200,
+    letterSpacing: 0,
+    height: 1.2,
   );
 }

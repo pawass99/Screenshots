@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:screenshots/features/scene_detail/presentation/scene_detail_page.dart';
 import 'package:screenshots/models/film.dart';
 import 'package:screenshots/models/scene.dart';
+import 'package:screenshots/navigation/archive_page_route.dart';
 import 'package:screenshots/theme/screenshot_colors.dart';
 import 'package:screenshots/theme/screenshot_spacing.dart';
 import 'package:screenshots/theme/screenshot_typography.dart';
@@ -66,7 +67,7 @@ class MovieDetailPage extends StatelessWidget {
                                   borderRadius: 24,
                                   onTap: () {
                                     Navigator.of(context).push(
-                                      MaterialPageRoute(
+                                      ArchivePageRoute(
                                         builder: (_) => SceneDetailPage(
                                           scene: scene,
                                           film: film,
