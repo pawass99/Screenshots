@@ -17,7 +17,7 @@ class ScreenshotTheme {
         surface: ScreenshotColors.surface,
         onSurface: ScreenshotColors.onSurface,
       ),
-      fontFamily: 'Roboto',
+      fontFamily: ScreenshotTypography.uiFamily,
       textTheme: const TextTheme(
         displayLarge: ScreenshotTypography.largeDisplay,
         displayMedium: ScreenshotTypography.mediumDisplay,

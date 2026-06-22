@@ -4,22 +4,30 @@ import 'package:screenshots/theme/screenshot_colors.dart';
 class ScreenshotTypography {
   const ScreenshotTypography._();
 
-  static const serifDisplayFamily = 'DMSerifDisplay';
-  static const headlineSerifFamily = 'CormorantGaramond';
+  static const filmTitleFamily = 'Tropikal';
+  static const quoteFamily = 'Maghfirea';
+  static const sceneDescriptionFamily = 'LibreBaskerville';
+  static const metadataFamily = 'Iosevka';
+  static const uiFamily = 'Inter';
+
+  static const serifDisplayFamily = sceneDescriptionFamily;
+  static const headlineSerifFamily = filmTitleFamily;
   static const splashWordmarkFamily = 'FutureTense';
-  static const authHeaderFamily = 'Coolvetica';
-  static const authBodyFamily = 'Montserrat';
+  static const authHeaderFamily = uiFamily;
+  static const authBodyFamily = uiFamily;
 
   static const largeDisplay = TextStyle(
     color: ScreenshotColors.onSurface,
+    fontFamily: filmTitleFamily,
     fontSize: 52,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w700,
     letterSpacing: 0,
     height: 0.92,
   );
 
   static const mediumDisplay = TextStyle(
     color: ScreenshotColors.onSurface,
+    fontFamily: filmTitleFamily,
     fontSize: 40,
     fontWeight: FontWeight.w700,
     letterSpacing: 0,
@@ -28,6 +36,7 @@ class ScreenshotTypography {
 
   static const headline = TextStyle(
     color: ScreenshotColors.onSurface,
+    fontFamily: uiFamily,
     fontSize: 32,
     fontWeight: FontWeight.w500,
     letterSpacing: 0,
@@ -36,6 +45,7 @@ class ScreenshotTypography {
 
   static const smallHeadline = TextStyle(
     color: ScreenshotColors.onSurface,
+    fontFamily: uiFamily,
     fontSize: 24,
     fontWeight: FontWeight.w500,
     letterSpacing: 0,
@@ -44,6 +54,7 @@ class ScreenshotTypography {
 
   static const bodyLarge = TextStyle(
     color: ScreenshotColors.onSurface,
+    fontFamily: uiFamily,
     fontSize: 18,
     fontWeight: FontWeight.w400,
     letterSpacing: 0,
@@ -52,6 +63,7 @@ class ScreenshotTypography {
 
   static const bodyMedium = TextStyle(
     color: ScreenshotColors.onSurfaceVariant,
+    fontFamily: uiFamily,
     fontSize: 16,
     fontWeight: FontWeight.w400,
     letterSpacing: 0,
@@ -60,6 +72,7 @@ class ScreenshotTypography {
 
   static const metadata = TextStyle(
     color: ScreenshotColors.onSurfaceVariant,
+    fontFamily: metadataFamily,
     fontSize: 12,
     fontWeight: FontWeight.w500,
     letterSpacing: 0.9,
@@ -68,6 +81,7 @@ class ScreenshotTypography {
 
   static const labelCaps = TextStyle(
     color: ScreenshotColors.onSurface,
+    fontFamily: metadataFamily,
     fontSize: 11,
     fontWeight: FontWeight.w700,
     letterSpacing: 1.4,
@@ -76,34 +90,45 @@ class ScreenshotTypography {
 
   static const serifDescription = TextStyle(
     color: ScreenshotColors.onSurface,
-    fontFamily: serifDisplayFamily,
+    fontFamily: sceneDescriptionFamily,
     fontSize: 18,
     fontWeight: FontWeight.w400,
     letterSpacing: 0,
     height: 1.32,
   );
 
+  static const sceneDescription = serifDescription;
+
+  static const quote = TextStyle(
+    color: ScreenshotColors.onSurface,
+    fontFamily: quoteFamily,
+    fontSize: 20,
+    fontWeight: FontWeight.w400,
+    letterSpacing: 0,
+    height: 1.28,
+  );
+
   static const archiveHeadline = TextStyle(
     color: ScreenshotColors.onSurface,
-    fontFamily: headlineSerifFamily,
+    fontFamily: uiFamily,
     fontSize: 25,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w600,
     letterSpacing: 0,
     height: 1,
   );
 
   static const archiveSectionTitle = TextStyle(
     color: ScreenshotColors.onSurface,
-    fontFamily: headlineSerifFamily,
+    fontFamily: uiFamily,
     fontSize: 24,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w600,
     letterSpacing: 0,
     height: 1.05,
   );
 
   static const archiveDisplayTitle = TextStyle(
     color: ScreenshotColors.onSurface,
-    fontFamily: headlineSerifFamily,
+    fontFamily: filmTitleFamily,
     fontSize: 40,
     fontWeight: FontWeight.w700,
     letterSpacing: 0,

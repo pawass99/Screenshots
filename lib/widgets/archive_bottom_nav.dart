@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:screenshots/theme/screenshot_colors.dart';
 import 'package:screenshots/theme/screenshot_spacing.dart';
+import 'package:screenshots/theme/screenshot_typography.dart';
 
 class ArchiveBottomNav extends StatelessWidget {
   const ArchiveBottomNav({
@@ -104,12 +105,12 @@ class _NavItem extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   label,
-                  style: TextStyle(
+                  style: ScreenshotTypography.metadata.copyWith(
                     color: isActive
                         ? ScreenshotColors.onSurface
                         : ScreenshotColors.outline,
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0,
                   ),
                 ),
               ],

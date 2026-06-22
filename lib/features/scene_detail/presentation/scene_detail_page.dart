@@ -9,7 +9,10 @@ import 'package:screenshots/widgets/archive_background.dart';
 import 'package:screenshots/widgets/archive_button.dart';
 import 'package:screenshots/widgets/archive_top_bar.dart';
 import 'package:screenshots/widgets/metadata_chip.dart';
-import 'package:screenshots/widgets/scene_frame.dart';
+import 'package:screenshots/features/share/widgets/scene_story_template.dart';
+import 'package:screenshots/services/instagram_story_share_service.dart';
+import 'package:screenshots/services/profile_service.dart';
+import 'package:screenshots/widgets/archive_scene_card.dart';
 
 class SceneDetailPage extends StatefulWidget {
   const SceneDetailPage({
@@ -66,6 +69,10 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
                     semanticLabel: 'Back',
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
+                  trailing: _ShareButton(
+                    scene: widget.scene,
+                    description: widget.scene.description ?? '',
+                  ),
                 ),
               ),
               SliverToBoxAdapter(
@@ -93,8 +100,6 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
                                 : ArchiveButtonVariant.primary,
                           ),
                         ),
-                        const SizedBox(width: ScreenshotSpacing.sm),
-                        const _ShareButton(),
                       ],
                     ),
                     const SizedBox(height: ScreenshotSpacing.lg),
@@ -105,48 +110,28 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
                     const SizedBox(height: ScreenshotSpacing.sm),
                     Text(
                       quote,
-                      style: ScreenshotTypography.serifDescription.copyWith(
+                      style: ScreenshotTypography.sceneDescription.copyWith(
                         color: ScreenshotColors.onSurfaceVariant,
                         fontSize: 16,
                         height: 1.36,
                       ),
                     ),
-                    const SizedBox(height: ScreenshotSpacing.md),
-                    Wrap(
-                      spacing: ScreenshotSpacing.xs,
-                      runSpacing: ScreenshotSpacing.xs,
-                      children: const [
-                        MetadataChip(label: 'Memory'),
-                        MetadataChip(label: 'Composition'),
-                        MetadataChip(label: 'Quiet'),
-                      ],
-                    ),
+                    if (widget.scene.tags.isNotEmpty) ...[
+                      const SizedBox(height: ScreenshotSpacing.md),
+                      Wrap(
+                        spacing: ScreenshotSpacing.xs,
+                        runSpacing: ScreenshotSpacing.xs,
+                        children: widget.scene.tags
+                            .map((tag) => MetadataChip(label: tag))
+                            .toList(),
+                      ),
+                    ],
                     if (widget.relatedScenes.isNotEmpty) ...[
                       const _DetailSectionTitle(
                         title: 'Related Scenes',
-                        meta: 'same mood',
+                        meta: 'archive',
                       ),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: widget.relatedScenes.length,
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: ScreenshotSpacing.sm,
-                              crossAxisSpacing: ScreenshotSpacing.sm,
-                              childAspectRatio: 0.92,
-                            ),
-                        itemBuilder: (context, index) {
-                          final scene = widget.relatedScenes[index];
-                          return SceneFrame(
-                            imageUrl: scene.imageUrl,
-                            title: scene.description ?? 'Related frame',
-                            aspectRatio: 1,
-                            borderRadius: 16,
-                          );
-                        },
-                      ),
+                      _RelatedSceneList(scenes: widget.relatedScenes),
                     ],
                   ],
                 ),
@@ -155,6 +140,29 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _RelatedSceneList extends StatelessWidget {
+  const _RelatedSceneList({required this.scenes});
+
+  final List<Scene> scenes;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: scenes.asMap().entries.map((entry) {
+        final isLast = entry.key == scenes.length - 1;
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: isLast ? 0 : ScreenshotSpacing.md),
+          child: ArchiveSceneCard(
+            scene: entry.value,
+            semanticLabel: 'Related scene ${entry.key + 1}',
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -207,28 +215,161 @@ class _SceneHeroMedia extends StatelessWidget {
   }
 }
 
-class _ShareButton extends StatelessWidget {
-  const _ShareButton();
+class _ShareButton extends StatefulWidget {
+  const _ShareButton({required this.scene, required this.description});
+
+  final Scene scene;
+  final String description;
+
+  @override
+  State<_ShareButton> createState() => _ShareButtonState();
+}
+
+class _ShareButtonState extends State<_ShareButton> {
+  final InstagramStoryShareService _instagramStoryShareService =
+      const InstagramStoryShareService();
+  final GlobalKey _repaintBoundaryKey = GlobalKey();
+  bool _isLoading = false;
+  bool _isSharingToInstagram = false;
+
+  Future<void> _handleShare() async {
+    setState(() => _isLoading = true);
+    String? avatarUrl;
+    try {
+      final profile = await const ProfileService().getCurrentProfile();
+      avatarUrl = profile.avatarUrl;
+    } catch (_) {
+      // Ignore error and fall back to null avatar
+    } finally {
+      if (mounted) {
+        await _precacheStoryImages(avatarUrl);
+        if (!mounted) {
+          return;
+        }
+        setState(() => _isLoading = false);
+        _showStoryDialog(avatarUrl);
+      }
+    }
+  }
+
+  Future<void> _precacheStoryImages(String? avatarUrl) async {
+    final urls = [
+      widget.scene.imageUrl,
+      avatarUrl ?? '',
+    ].where((url) => url.trim().isNotEmpty).toSet();
+
+    for (final url in urls) {
+      try {
+        await precacheImage(CachedNetworkImageProvider(url), context);
+      } catch (_) {
+        // The story template has image fallbacks if a remote image fails.
+      }
+    }
+  }
+
+  void _showStoryDialog(String? avatarUrl) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.all(ScreenshotSpacing.lg),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(24),
+                      child: SceneStoryTemplate(
+                        sceneImageUrl: widget.scene.imageUrl,
+                        description: widget.description,
+                        userProfileImageUrl: avatarUrl,
+                        repaintBoundaryKey: _repaintBoundaryKey,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: ScreenshotSpacing.lg),
+                  Row(
+                    children: [
+                      ArchiveIconButton(
+                        icon: Icons.close_rounded,
+                        onPressed: _isSharingToInstagram
+                            ? null
+                            : () => Navigator.of(dialogContext).pop(),
+                        semanticLabel: 'Close',
+                      ),
+                      const SizedBox(width: ScreenshotSpacing.sm),
+                      Expanded(
+                        child: ArchiveButton(
+                          label: 'Instagram Story',
+                          isLoading: _isSharingToInstagram,
+                          onPressed: _isSharingToInstagram
+                              ? null
+                              : () => _shareToInstagramStory(
+                                  dialogContext,
+                                  setDialogState,
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _shareToInstagramStory(
+    BuildContext dialogContext,
+    StateSetter setDialogState,
+  ) async {
+    setState(() => _isSharingToInstagram = true);
+    setDialogState(() {});
+
+    try {
+      await _instagramStoryShareService.shareTemplate(_repaintBoundaryKey);
+      if (dialogContext.mounted) {
+        Navigator.of(dialogContext).pop();
+      }
+    } on InstagramStoryShareException catch (error) {
+      _showShareMessage(error.message);
+    } catch (_) {
+      _showShareMessage('Could not share to Instagram Stories.');
+    } finally {
+      if (mounted) {
+        setState(() => _isSharingToInstagram = false);
+        if (dialogContext.mounted) {
+          setDialogState(() {});
+        }
+      }
+    }
+  }
+
+  void _showShareMessage(String message) {
+    if (!mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ScreenshotColors.surfaceHigh,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 52,
-      height: ScreenshotSpacing.tapTarget,
-      child: IconButton(
-        onPressed: () {},
-        icon: const Icon(Icons.ios_share_rounded),
-        iconSize: 19,
-        color: ScreenshotColors.onSurface,
-        tooltip: 'Share scene',
-        style: IconButton.styleFrom(
-          backgroundColor: ScreenshotColors.surfaceLow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(2),
-            side: const BorderSide(color: ScreenshotColors.outlineVariant),
-          ),
-        ),
-      ),
+    return ArchiveIconButton(
+      icon: Icons.ios_share_rounded,
+      onPressed: _isLoading ? null : _handleShare,
+      semanticLabel: 'Share scene',
     );
   }
 }

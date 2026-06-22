@@ -1,7 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:screenshots/models/film.dart';
 import 'package:screenshots/models/scene.dart';
+import 'package:screenshots/models/user_profile.dart';
+import 'package:screenshots/services/profile_service.dart';
 import 'package:screenshots/theme/screenshot_colors.dart';
 import 'package:screenshots/theme/screenshot_spacing.dart';
 import 'package:screenshots/theme/screenshot_typography.dart';
@@ -23,50 +26,205 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  static const _usernameLimit = 15;
-  static const _bioLimit = 84;
+  static const _displayNameLimit = 32;
+  static const _bioLimit = 160;
 
-  String _username = 'Aqsha Maulana';
-  String _bio = 'just a guy who wants to share his collection. Idk';
+  final ProfileService _profileService = const ProfileService();
+  final ImagePicker _imagePicker = ImagePicker();
+
+  UserProfile? _profile;
+  String _username = 'archive_user';
+  String _displayName = 'Archive User';
+  String _bio = '';
   String? _bannerUrl;
   String? _avatarUrl;
+  String? _profileError;
+  bool _isLoadingProfile = true;
   bool _isEditingProfile = false;
-  late final TextEditingController _usernameController;
+  bool _isSavingProfile = false;
+  bool _isUploadingAvatar = false;
+  bool _isUploadingBanner = false;
+  late final TextEditingController _displayNameController;
   late final TextEditingController _bioController;
 
   @override
   void initState() {
     super.initState();
-    _usernameController = TextEditingController(text: _username);
+    _displayNameController = TextEditingController(text: _displayName);
     _bioController = TextEditingController(text: _bio);
+    _loadProfile();
   }
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _displayNameController.dispose();
     _bioController.dispose();
     super.dispose();
   }
 
-  void _toggleProfileEditing() {
+  Future<void> _loadProfile() async {
+    setState(() {
+      _isLoadingProfile = true;
+      _profileError = null;
+    });
+
+    try {
+      final profile = await _profileService.getCurrentProfile();
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _profile = profile;
+        _username = profile.username;
+        _displayName = _limitText(profile.displayName, _displayNameLimit);
+        _bio = _limitText(profile.bio, _bioLimit);
+        _avatarUrl = profile.avatarUrl;
+        _bannerUrl = profile.bannerUrl;
+        _displayNameController.text = _displayName;
+        _bioController.text = _bio;
+        _isLoadingProfile = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _profileError = error.toString();
+        _isLoadingProfile = false;
+      });
+    }
+  }
+
+  Future<void> _toggleProfileEditing() async {
+    if (_isSavingProfile || _isLoadingProfile) {
+      return;
+    }
+
     if (!_isEditingProfile) {
       setState(() => _isEditingProfile = true);
       return;
     }
 
-    setState(() {
-      _username = _limitText(
-        _usernameController.text.trim().isEmpty
-            ? 'Archive User'
-            : _usernameController.text.trim(),
-        _usernameLimit,
+    final profile = _profile;
+    if (profile == null) {
+      _showProfileMessage('Profile record is not ready yet.');
+      return;
+    }
+
+    final displayName = _limitText(
+      _displayNameController.text.trim().isEmpty
+          ? profile.username
+          : _displayNameController.text.trim(),
+      _displayNameLimit,
+    );
+    final bio = _limitText(_bioController.text.trim(), _bioLimit);
+
+    setState(() => _isSavingProfile = true);
+
+    try {
+      final updated = await _profileService.saveProfile(
+        profile.copyWith(displayName: displayName, bio: bio),
       );
-      _bio = _limitText(_bioController.text.trim(), _bioLimit);
-      _usernameController.text = _username;
-      _bioController.text = _bio;
-      _isEditingProfile = false;
-      // TODO(profile-backend): simpan username dan bio profile ke tabel profile user di Supabase.
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _profile = updated;
+        _displayName = displayName;
+        _bio = bio;
+        _displayNameController.text = displayName;
+        _bioController.text = bio;
+        _isEditingProfile = false;
+      });
+    } catch (error) {
+      if (mounted) {
+        _showProfileMessage(_profileFailureMessage(error));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingProfile = false);
+      }
+    }
+  }
+
+  Future<void> _changeProfileImage({
+    required _ProfileImageTarget target,
+  }) async {
+    final isBanner = target == _ProfileImageTarget.banner;
+    if (_isLoadingProfile || _isUploadingAvatar || _isUploadingBanner) {
+      return;
+    }
+
+    final pickedImage = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: isBanner ? 88 : 92,
+      maxWidth: isBanner ? 2200 : 1200,
+    );
+
+    if (pickedImage == null) {
+      return;
+    }
+
+    setState(() {
+      if (isBanner) {
+        _isUploadingBanner = true;
+      } else {
+        _isUploadingAvatar = true;
+      }
     });
+
+    try {
+      final bytes = await pickedImage.readAsBytes();
+      final imageUrl = await _profileService.uploadProfileImage(
+        kind: isBanner ? ProfileImageKind.banner : ProfileImageKind.avatar,
+        bytes: bytes,
+        fileName: pickedImage.name,
+        contentType: pickedImage.mimeType,
+      );
+
+      final profile = _profile ?? await _profileService.getCurrentProfile();
+      final updated = await _profileService.saveProfile(
+        isBanner
+            ? profile.copyWith(bannerUrl: imageUrl)
+            : profile.copyWith(avatarUrl: imageUrl),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _profile = updated;
+        _username = updated.username;
+        _displayName = _limitText(updated.displayName, _displayNameLimit);
+        _bio = _limitText(updated.bio, _bioLimit);
+        _displayNameController.text = _displayName;
+        _bioController.text = _bio;
+        if (isBanner) {
+          _bannerUrl = imageUrl;
+        } else {
+          _avatarUrl = imageUrl;
+        }
+      });
+    } catch (error) {
+      if (mounted) {
+        _showProfileMessage(_profileFailureMessage(error, isBanner: isBanner));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          if (isBanner) {
+            _isUploadingBanner = false;
+          } else {
+            _isUploadingAvatar = false;
+          }
+        });
+      }
+    }
   }
 
   void _syncProfileTextControllers() {
@@ -74,85 +232,36 @@ class _ProfilePageState extends State<ProfilePage> {
       return;
     }
 
-    _usernameController.text = _username;
+    _displayNameController.text = _displayName;
     _bioController.text = _bio;
   }
 
-  void _changeProfileImage({required _ProfileImageTarget target}) {
-    final options = _profileImageOptions(
-      films: widget.films,
-      scenes: widget.scenes,
-      preferWide: target == _ProfileImageTarget.banner,
+  void _showProfileMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: ScreenshotColors.surfaceHigh,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
+  }
 
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: ScreenshotColors.surfaceLow,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              ScreenshotSpacing.mobileMargin,
-              0,
-              ScreenshotSpacing.mobileMargin,
-              ScreenshotSpacing.xl,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  target == _ProfileImageTarget.banner
-                      ? 'Choose Banner'
-                      : 'Choose Profile Photo',
-                  style: ScreenshotTypography.smallHeadline,
-                ),
-                const SizedBox(height: ScreenshotSpacing.md),
-                SizedBox(
-                  height: 112,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: options.length,
-                    separatorBuilder: (_, _) =>
-                        const SizedBox(width: ScreenshotSpacing.sm),
-                    itemBuilder: (context, index) {
-                      final imageUrl = options[index];
+  String _profileFailureMessage(Object error, {bool? isBanner}) {
+    final imageName = isBanner == true ? 'banner' : 'profile photo';
+    if (error is ProfileServiceException) {
+      return switch (error.operation) {
+        ProfileOperation.upload =>
+          'Unable to upload $imageName: ${error.message}',
+        ProfileOperation.save =>
+          'The image was uploaded, but the profile could not be updated: '
+              '${error.message}',
+        ProfileOperation.load => 'Unable to load profile: ${error.message}',
+      };
+    }
 
-                      // Membuat pilihan gambar lokal sementara.
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            if (target == _ProfileImageTarget.banner) {
-                              _bannerUrl = imageUrl;
-                              // TODO(profile-backend): simpan banner profile URL/path ke Supabase Storage + tabel profile user.
-                            } else {
-                              _avatarUrl = imageUrl;
-                              // TODO(profile-backend): simpan avatar profile URL/path ke Supabase Storage + tabel profile user.
-                            }
-                          });
-                          Navigator.of(context).pop();
-                        },
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(18),
-                          child: SizedBox(
-                            width: target == _ProfileImageTarget.banner
-                                ? 168
-                                : 112,
-                            height: 112,
-                            child: _ProfileArchiveImage(imageUrl: imageUrl),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+    return isBanner == null
+        ? 'Unable to save profile.'
+        : 'Unable to update $imageName.';
   }
 
   @override
@@ -183,19 +292,33 @@ class _ProfilePageState extends State<ProfilePage> {
               _ProfileHero(
                 bannerUrl: bannerUrl,
                 avatarUrl: avatarUrl,
+                isUploadingBanner: _isUploadingBanner,
+                isUploadingAvatar: _isUploadingAvatar,
                 onChangeBanner: () =>
                     _changeProfileImage(target: _ProfileImageTarget.banner),
                 onChangeAvatar: () =>
                     _changeProfileImage(target: _ProfileImageTarget.avatar),
               ),
               const SizedBox(height: 20),
+              if (_profileError != null) ...[
+                _ProfileStatusMessage(
+                  message: 'Profile could not be loaded.',
+                  onRetry: _loadProfile,
+                ),
+                const SizedBox(height: ScreenshotSpacing.md),
+              ] else if (_isLoadingProfile) ...[
+                const _ProfileStatusMessage(message: 'Loading profile.'),
+                const SizedBox(height: ScreenshotSpacing.md),
+              ],
               _ProfileIdentity(
-                username: _limitText(_username, _usernameLimit),
+                displayName: _limitText(_displayName, _displayNameLimit),
+                username: _username,
                 bio: _limitText(_bio, _bioLimit),
                 isEditing: _isEditingProfile,
-                usernameController: _usernameController,
+                isSaving: _isSavingProfile,
+                displayNameController: _displayNameController,
                 bioController: _bioController,
-                usernameLimit: _usernameLimit,
+                displayNameLimit: _displayNameLimit,
                 bioLimit: _bioLimit,
                 onEditToggle: _toggleProfileEditing,
               ),
@@ -228,16 +351,58 @@ class _ProfilePageState extends State<ProfilePage> {
 
 enum _ProfileImageTarget { banner, avatar }
 
+class _ProfileStatusMessage extends StatelessWidget {
+  const _ProfileStatusMessage({required this.message, this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0x12EAE1DA),
+        border: Border.all(color: ScreenshotColors.outlineVariant),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(ScreenshotSpacing.sm),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                message,
+                style: ScreenshotTypography.metadata.copyWith(
+                  color: ScreenshotColors.onSurfaceVariant,
+                  letterSpacing: 0,
+                ),
+              ),
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(width: ScreenshotSpacing.sm),
+              TextButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ProfileHero extends StatelessWidget {
   const _ProfileHero({
     required this.bannerUrl,
     required this.avatarUrl,
+    required this.isUploadingBanner,
+    required this.isUploadingAvatar,
     required this.onChangeBanner,
     required this.onChangeAvatar,
   });
 
   final String bannerUrl;
   final String avatarUrl;
+  final bool isUploadingBanner;
+  final bool isUploadingAvatar;
   final VoidCallback onChangeBanner;
   final VoidCallback onChangeAvatar;
 
@@ -273,6 +438,7 @@ class _ProfileHero extends StatelessWidget {
                     child: _ProfileIconAction(
                       icon: Icons.image_outlined,
                       tooltip: 'Change banner',
+                      isLoading: isUploadingBanner,
                       onPressed: onChangeBanner,
                     ),
                   ),
@@ -307,6 +473,7 @@ class _ProfileHero extends StatelessWidget {
                   child: _ProfileIconAction(
                     icon: Icons.photo_camera_outlined,
                     tooltip: 'Change profile photo',
+                    isLoading: isUploadingAvatar,
                     onPressed: onChangeAvatar,
                   ),
                 ),
@@ -321,22 +488,26 @@ class _ProfileHero extends StatelessWidget {
 
 class _ProfileIdentity extends StatelessWidget {
   const _ProfileIdentity({
+    required this.displayName,
     required this.username,
     required this.bio,
     required this.isEditing,
-    required this.usernameController,
+    required this.isSaving,
+    required this.displayNameController,
     required this.bioController,
-    required this.usernameLimit,
+    required this.displayNameLimit,
     required this.bioLimit,
     required this.onEditToggle,
   });
 
+  final String displayName;
   final String username;
   final String bio;
   final bool isEditing;
-  final TextEditingController usernameController;
+  final bool isSaving;
+  final TextEditingController displayNameController;
   final TextEditingController bioController;
-  final int usernameLimit;
+  final int displayNameLimit;
   final int bioLimit;
   final VoidCallback onEditToggle;
 
@@ -356,14 +527,14 @@ class _ProfileIdentity extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 34),
                   child: isEditing
                       ? _ProfileInlineTextField(
-                          controller: usernameController,
-                          maxLength: usernameLimit,
+                          controller: displayNameController,
+                          maxLength: displayNameLimit,
                           textAlign: TextAlign.center,
                           textStyle: _profileUsernameStyle,
                           textInputAction: TextInputAction.next,
                         )
                       : Text(
-                          username,
+                          displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
@@ -377,15 +548,23 @@ class _ProfileIdentity extends StatelessWidget {
                   width: 32,
                   height: 32,
                   child: IconButton(
-                    onPressed: onEditToggle,
+                    onPressed: isSaving ? null : onEditToggle,
                     padding: EdgeInsets.zero,
                     tooltip: isEditing
                         ? 'Save profile text'
                         : 'Edit profile text',
-                    icon: Icon(
-                      isEditing ? Icons.check_rounded : Icons.edit_outlined,
-                      size: isEditing ? 18 : 14,
-                    ),
+                    icon: isSaving
+                        ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(strokeWidth: 1.7),
+                          )
+                        : Icon(
+                            isEditing
+                                ? Icons.check_rounded
+                                : Icons.edit_outlined,
+                            size: isEditing ? 18 : 14,
+                          ),
                     color: ScreenshotColors.onSurfaceVariant,
                   ),
                 ),
@@ -393,6 +572,19 @@ class _ProfileIdentity extends StatelessWidget {
             ],
           ),
         ),
+        if (username.trim().isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            '@${username.trim()}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: ScreenshotTypography.metadata.copyWith(
+              color: ScreenshotColors.outline,
+              letterSpacing: 0,
+            ),
+          ),
+        ],
         const SizedBox(height: ScreenshotSpacing.sm),
         // Membuat deskripsi bio profile.
         ConstrainedBox(
@@ -490,11 +682,13 @@ class _ProfileIconAction extends StatelessWidget {
   const _ProfileIconAction({
     required this.icon,
     required this.tooltip,
+    this.isLoading = false,
     required this.onPressed,
   });
 
   final IconData icon;
   final String tooltip;
+  final bool isLoading;
   final VoidCallback onPressed;
 
   @override
@@ -503,9 +697,15 @@ class _ProfileIconAction extends StatelessWidget {
       width: ScreenshotSpacing.tapTarget,
       height: ScreenshotSpacing.tapTarget,
       child: IconButton(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         tooltip: tooltip,
-        icon: Icon(icon, size: 19),
+        icon: isLoading
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(icon, size: 19),
         color: Colors.white,
         style: IconButton.styleFrom(
           backgroundColor: Colors.black.withValues(alpha: 0.48),
@@ -642,25 +842,6 @@ List<_ProfileCollection> _placeholderCollections(List<Scene> scenes) {
 
     return _ProfileCollection(name: names[index], imageUrl: imageUrl);
   });
-}
-
-List<String> _profileImageOptions({
-  required List<Film> films,
-  required List<Scene> scenes,
-  required bool preferWide,
-}) {
-  final filmImages = films
-      .expand((film) => [film.heroImageUrl, film.posterUrl ?? ''])
-      .where((imageUrl) => imageUrl.trim().isNotEmpty);
-  final sceneImages = scenes
-      .map((scene) => scene.imageUrl)
-      .where((imageUrl) => imageUrl.trim().isNotEmpty);
-
-  final ordered = preferWide
-      ? [...filmImages, ...sceneImages]
-      : [...sceneImages, ...filmImages];
-
-  return ordered.toSet().take(12).toList();
 }
 
 String _firstUsableImage(List<String> imageUrls) {

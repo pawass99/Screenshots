@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_svg: ^2.2.3
+  image_picker: ^1.2.2
   supabase_flutter: ^2.12.4
 
 dev_dependencies:
@@ -21,6 +22,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/images/Logo.png
+    - assets/images/Logo.svg
     - assets/images/screenshot_wordmark.svg
   fonts:
     - family: DMSerifDisplay
@@ -43,4 +46,24 @@ flutter:
       fonts:
         - asset: assets/fonts/Montserrat.ttf
         - asset: assets/fonts/Montserrat-Italic.ttf
+          style: italic
+    - family: Tropikal
+      fonts:
+        - asset: assets/fonts/tropikal-bold.otf
+          weight: 700
+    - family: Maghfirea
+      fonts:
+        - asset: assets/fonts/Maghfirea.otf
+    - family: LibreBaskerville
+      fonts:
+        - asset: assets/fonts/LibreBaskerville.ttf
+        - asset: assets/fonts/LibreBaskerville-Italic.ttf
+          style: italic
+    - family: Iosevka
+      fonts:
+        - asset: assets/fonts/Iosevka-Regular.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf
+        - asset: assets/fonts/Inter-Italic.ttf
           style: italic

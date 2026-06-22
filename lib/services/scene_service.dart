@@ -7,7 +7,9 @@ class SceneService {
   Future<List<Scene>> getScenes() async {
     final data = await Supabase.instance.client
         .from('scenes')
-        .select('id, film_id, image_url, description, created_at')
+        .select(
+          'id, film_id, image_url, description, created_at, scene_tags(tags(name))',
+        )
         .order('created_at', ascending: false);
 
     return data

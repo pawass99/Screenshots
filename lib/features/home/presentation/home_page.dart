@@ -15,8 +15,8 @@ import 'package:screenshots/theme/screenshot_typography.dart';
 import 'package:screenshots/widgets/archive_background.dart';
 import 'package:screenshots/widgets/archive_bottom_nav.dart';
 import 'package:screenshots/widgets/archive_search_box.dart';
+import 'package:screenshots/widgets/archive_scene_card.dart';
 import 'package:screenshots/widgets/archive_top_bar.dart';
-import 'package:screenshots/widgets/metadata_chip.dart';
 import 'package:screenshots/widgets/scene_frame.dart';
 
 class HomePage extends StatefulWidget {
@@ -29,24 +29,12 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final FilmService _filmService = const FilmService();
   final SceneService _sceneService = const SceneService();
-  final TextEditingController _homeSearchController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _savedSearchController = TextEditingController();
 
   late Future<_HomeData> _homeFuture;
   int _tabIndex = 0;
-  String _homeTag = 'all';
-  String _savedTag = 'all';
   final Set<String> _savedSceneIds = <String>{};
-
-  static const _tags = [
-    'all',
-    'cinematography',
-    'neon',
-    'symmetry',
-    'indie',
-    'wide',
-  ];
 
   @override
   void initState() {
@@ -56,7 +44,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _homeSearchController.dispose();
     _searchController.dispose();
     _savedSearchController.dispose();
     super.dispose();
@@ -65,8 +52,10 @@ class _HomePageState extends State<HomePage> {
   Future<_HomeData> _fetchHomeData() async {
     final filmsFuture = _filmService.getFilms();
     final scenesFuture = _sceneService.getScenes();
+    final films = await filmsFuture;
+    final scenes = [...await scenesFuture]..shuffle();
 
-    return _HomeData(films: await filmsFuture, scenes: await scenesFuture);
+    return _HomeData(films: films, scenes: scenes);
   }
 
   void _retryFetchHomeData() {
@@ -137,11 +126,6 @@ class _HomePageState extends State<HomePage> {
                     children: [
                       _DiscoveryPage(
                         data: data,
-                        queryController: _homeSearchController,
-                        selectedTag: _homeTag,
-                        tags: _tags,
-                        onQueryChanged: (_) => setState(() {}),
-                        onTagChanged: (tag) => setState(() => _homeTag = tag),
                         onOpenMovie: _openMovie,
                         onOpenScene: (scene) => _openScene(scene, data),
                       ),
@@ -153,18 +137,15 @@ class _HomePageState extends State<HomePage> {
                       ),
                       _SavedPage(
                         data: data,
-                        savedSceneIds: _effectiveSavedSceneIds(data.scenes),
+                        savedSceneIds: _effectiveSavedSceneIds(),
                         controller: _savedSearchController,
-                        selectedTag: _savedTag,
-                        tags: _tags,
                         onChanged: (_) => setState(() {}),
-                        onTagChanged: (tag) => setState(() => _savedTag = tag),
                         onOpenScene: (scene) => _openScene(scene, data),
                       ),
                       ProfilePage(
                         films: data.films,
                         scenes: data.scenes,
-                        savedCount: _effectiveSavedSceneIds(data.scenes).length,
+                        savedCount: _effectiveSavedSceneIds().length,
                       ),
                     ],
                   ),
@@ -184,12 +165,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Set<String> _effectiveSavedSceneIds(List<Scene> scenes) {
-    if (_savedSceneIds.isNotEmpty) {
-      return _savedSceneIds;
-    }
-
-    return scenes.take(3).map((scene) => scene.id).toSet();
+  Set<String> _effectiveSavedSceneIds() {
+    return _savedSceneIds;
   }
 }
 
@@ -218,31 +195,17 @@ class _HomeData {
 class _DiscoveryPage extends StatelessWidget {
   const _DiscoveryPage({
     required this.data,
-    required this.queryController,
-    required this.selectedTag,
-    required this.tags,
-    required this.onQueryChanged,
-    required this.onTagChanged,
     required this.onOpenMovie,
     required this.onOpenScene,
   });
 
   final _HomeData data;
-  final TextEditingController queryController;
-  final String selectedTag;
-  final List<String> tags;
-  final ValueChanged<String> onQueryChanged;
-  final ValueChanged<String> onTagChanged;
   final void Function(Film film, List<Scene> scenes) onOpenMovie;
   final ValueChanged<Scene> onOpenScene;
 
   @override
   Widget build(BuildContext context) {
-    final filteredScenes = _filterScenes(
-      data.scenes,
-      queryController.text,
-      selectedTag,
-    );
+    final visibleScenes = data.scenes.where((scene) => scene.hasImage).toList();
 
     return CustomScrollView(
       slivers: [
@@ -260,17 +223,6 @@ class _DiscoveryPage extends StatelessWidget {
           sliver: SliverList.list(
             children: [
               const SizedBox(height: ScreenshotSpacing.md),
-              ArchiveSearchBox(
-                controller: queryController,
-                hintText: 'Search scenes, tags, directors',
-                onChanged: onQueryChanged,
-              ),
-              const SizedBox(height: ScreenshotSpacing.sm),
-              _TagRail(
-                tags: tags,
-                selectedTag: selectedTag,
-                onTagChanged: onTagChanged,
-              ),
               const _ArchiveSectionTitle(title: 'Our Films', meta: 'Swipe'),
               if (data.films.isEmpty)
                 const _InlineArchiveMessage('No movie records yet.')
@@ -280,20 +232,34 @@ class _DiscoveryPage extends StatelessWidget {
                   onTap: (film) => onOpenMovie(film, data.scenesForFilm(film)),
                 ),
               _ArchiveSectionTitle(
-                title: 'Field of Frames',
-                meta: filteredScenes.length.toString(),
+                title: 'Our Scenes',
+                meta: visibleScenes.length.toString(),
               ),
-              if (filteredScenes.isEmpty)
-                const _InlineArchiveMessage('No saved light in that frame.')
-              else
-                _SceneFeed(
-                  scenes: filteredScenes,
-                  data: data,
-                  onOpenScene: onOpenScene,
-                ),
+              if (visibleScenes.isEmpty)
+                const _InlineArchiveMessage('No saved light in that frame.'),
             ],
           ),
         ),
+        if (visibleScenes.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: ScreenshotSpacing.mobileMargin,
+            ),
+            sliver: SliverList.separated(
+              itemCount: visibleScenes.length,
+              separatorBuilder: (_, _) =>
+                  const SizedBox(height: ScreenshotSpacing.md),
+              itemBuilder: (context, index) {
+                final scene = visibleScenes[index];
+
+                return ArchiveSceneCard(
+                  scene: scene,
+                  semanticLabel: 'Open scene ${index + 1}',
+                  onTap: () => onOpenScene(scene),
+                );
+              },
+            ),
+          ),
         const SliverToBoxAdapter(child: SizedBox(height: 112)),
       ],
     );
@@ -315,7 +281,7 @@ class _SearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final results = _filterScenes(data.scenes, controller.text, 'all');
+    final results = _filterScenes(data.scenes, controller.text);
 
     return CustomScrollView(
       slivers: [
@@ -339,11 +305,7 @@ class _SearchPage extends StatelessWidget {
               if (results.isEmpty)
                 const _InlineArchiveMessage('No frame matches that search.')
               else
-                _SceneFeed(
-                  scenes: results,
-                  data: data,
-                  onOpenScene: onOpenScene,
-                ),
+                _SceneFeed(scenes: results, onOpenScene: onOpenScene),
             ],
           ),
         ),
@@ -358,20 +320,14 @@ class _SavedPage extends StatelessWidget {
     required this.data,
     required this.savedSceneIds,
     required this.controller,
-    required this.selectedTag,
-    required this.tags,
     required this.onChanged,
-    required this.onTagChanged,
     required this.onOpenScene,
   });
 
   final _HomeData data;
   final Set<String> savedSceneIds;
   final TextEditingController controller;
-  final String selectedTag;
-  final List<String> tags;
   final ValueChanged<String> onChanged;
-  final ValueChanged<String> onTagChanged;
   final ValueChanged<Scene> onOpenScene;
 
   @override
@@ -379,7 +335,7 @@ class _SavedPage extends StatelessWidget {
     final saved = data.scenes
         .where((scene) => savedSceneIds.contains(scene.id))
         .toList();
-    final filtered = _filterScenes(saved, controller.text, selectedTag);
+    final filtered = _filterScenes(saved, controller.text);
 
     return CustomScrollView(
       slivers: [
@@ -397,12 +353,6 @@ class _SavedPage extends StatelessWidget {
                 hintText: 'Filter by movie or tag',
                 onChanged: onChanged,
               ),
-              const SizedBox(height: ScreenshotSpacing.sm),
-              _TagRail(
-                tags: tags,
-                selectedTag: selectedTag,
-                onTagChanged: onTagChanged,
-              ),
               const _ArchiveSectionTitle(
                 title: 'Saved Scenes',
                 meta: 'Private',
@@ -412,11 +362,7 @@ class _SavedPage extends StatelessWidget {
                   'No saved scenes match that filter.',
                 )
               else
-                _SavedMasonry(
-                  scenes: filtered,
-                  data: data,
-                  onOpenScene: onOpenScene,
-                ),
+                _SavedMasonry(scenes: filtered, onOpenScene: onOpenScene),
             ],
           ),
         ),
@@ -477,7 +423,7 @@ class _HeroArchiveCard extends StatelessWidget {
         width: double.infinity,
         height: heroHeight,
         child: ClipRRect(
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          borderRadius: BorderRadius.zero,
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -504,8 +450,6 @@ class _HeroArchiveCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _Badge(label: "Editor's frame"),
-                    const SizedBox(height: ScreenshotSpacing.xs),
                     Text(
                       film?.title ?? 'Archive Pending',
                       maxLines: 2,
@@ -513,14 +457,6 @@ class _HeroArchiveCard extends StatelessWidget {
                       style: ScreenshotTypography.archiveDisplayTitle.copyWith(
                         fontSize: 34,
                         height: 0.98,
-                      ),
-                    ),
-                    const SizedBox(height: ScreenshotSpacing.xs),
-                    Text(
-                      _filmMetaLine(film),
-                      style: ScreenshotTypography.metadata.copyWith(
-                        color: ScreenshotColors.onSurfaceVariant,
-                        letterSpacing: 0,
                       ),
                     ),
                   ],
@@ -676,10 +612,10 @@ class _PosterCard extends StatelessWidget {
                   film.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: ScreenshotTypography.metadata.copyWith(
                     color: ScreenshotColors.onSurface,
                     fontSize: 12,
-                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
                   ),
                 ),
               ),
@@ -692,14 +628,9 @@ class _PosterCard extends StatelessWidget {
 }
 
 class _SceneFeed extends StatelessWidget {
-  const _SceneFeed({
-    required this.scenes,
-    required this.data,
-    required this.onOpenScene,
-  });
+  const _SceneFeed({required this.scenes, required this.onOpenScene});
 
   final List<Scene> scenes;
-  final _HomeData data;
   final ValueChanged<Scene> onOpenScene;
 
   @override
@@ -709,12 +640,8 @@ class _SceneFeed extends StatelessWidget {
           .map(
             (scene) => Padding(
               padding: const EdgeInsets.only(bottom: ScreenshotSpacing.md),
-              child: SceneFrame(
-                imageUrl: scene.imageUrl,
-                title: _sceneTitle(scene),
-                subtitle: data.filmForScene(scene)?.title ?? 'Scene Archive',
-                aspectRatio: 1.72,
-                borderRadius: 24,
+              child: ArchiveSceneCard(
+                scene: scene,
                 onTap: () => onOpenScene(scene),
               ),
             ),
@@ -725,14 +652,9 @@ class _SceneFeed extends StatelessWidget {
 }
 
 class _SavedMasonry extends StatelessWidget {
-  const _SavedMasonry({
-    required this.scenes,
-    required this.data,
-    required this.onOpenScene,
-  });
+  const _SavedMasonry({required this.scenes, required this.onOpenScene});
 
   final List<Scene> scenes;
-  final _HomeData data;
   final ValueChanged<Scene> onOpenScene;
 
   @override
@@ -747,19 +669,11 @@ class _SavedMasonry extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: _SavedColumn(
-            scenes: left,
-            data: data,
-            onOpenScene: onOpenScene,
-          ),
+          child: _SavedColumn(scenes: left, onOpenScene: onOpenScene),
         ),
         const SizedBox(width: ScreenshotSpacing.sm),
         Expanded(
-          child: _SavedColumn(
-            scenes: right,
-            data: data,
-            onOpenScene: onOpenScene,
-          ),
+          child: _SavedColumn(scenes: right, onOpenScene: onOpenScene),
         ),
       ],
     );
@@ -767,14 +681,9 @@ class _SavedMasonry extends StatelessWidget {
 }
 
 class _SavedColumn extends StatelessWidget {
-  const _SavedColumn({
-    required this.scenes,
-    required this.data,
-    required this.onOpenScene,
-  });
+  const _SavedColumn({required this.scenes, required this.onOpenScene});
 
   final List<Scene> scenes;
-  final _HomeData data;
   final ValueChanged<Scene> onOpenScene;
 
   @override
@@ -788,7 +697,6 @@ class _SavedColumn extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: ScreenshotSpacing.sm),
               child: SceneFrame(
                 imageUrl: entry.value.imageUrl,
-                title: data.filmForScene(entry.value)?.title ?? 'Saved Frame',
                 aspectRatio: entry.key.isEven ? 0.78 : 0.92,
                 borderRadius: 16,
                 onTap: () => onOpenScene(entry.value),
@@ -796,38 +704,6 @@ class _SavedColumn extends StatelessWidget {
             ),
           )
           .toList(),
-    );
-  }
-}
-
-class _TagRail extends StatelessWidget {
-  const _TagRail({
-    required this.tags,
-    required this.selectedTag,
-    required this.onTagChanged,
-  });
-
-  final List<String> tags;
-  final String selectedTag;
-  final ValueChanged<String> onTagChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 36,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: tags.length,
-        separatorBuilder: (_, _) => const SizedBox(width: ScreenshotSpacing.xs),
-        itemBuilder: (context, index) {
-          final tag = tags[index];
-          return MetadataChip(
-            label: tag == 'all' ? 'All' : tag.replaceAll('-', ' '),
-            isActive: tag == selectedTag,
-            onPressed: () => onTagChanged(tag),
-          );
-        },
-      ),
     );
   }
 }
@@ -887,29 +763,6 @@ class _InlineArchiveMessage extends StatelessWidget {
             letterSpacing: 0,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0x22EAE1DA),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: ScreenshotSpacing.sm,
-          vertical: ScreenshotSpacing.xs,
-        ),
-        child: Text(label, style: ScreenshotTypography.metadata),
       ),
     );
   }
@@ -1007,12 +860,12 @@ class _HomeEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(ScreenshotSpacing.xl),
+        padding: const EdgeInsets.all(ScreenshotSpacing.xl),
         child: Text(
           'No archive records yet.',
-          style: TextStyle(
+          style: ScreenshotTypography.bodyMedium.copyWith(
             color: ScreenshotColors.onSurfaceVariant,
             fontSize: 15,
           ),
@@ -1029,16 +882,16 @@ List<Film> _heroFilms(List<Film> films) {
   return [...withHero, ...withoutHero];
 }
 
-List<Scene> _filterScenes(List<Scene> scenes, String query, String tag) {
+List<Scene> _filterScenes(List<Scene> scenes, String query) {
   final normalizedQuery = query.trim().toLowerCase();
 
   return scenes.where((scene) {
     final description = scene.description?.toLowerCase() ?? '';
-    final haystack = '${scene.id} ${scene.filmId} $description';
+    final tags = scene.tags.join(' ').toLowerCase();
+    final haystack = '${scene.id} ${scene.filmId} $description $tags';
     final queryMatch =
         normalizedQuery.isEmpty || haystack.contains(normalizedQuery);
-    final tagMatch = tag == 'all' || haystack.contains(tag);
-    return scene.hasImage && queryMatch && tagMatch;
+    return scene.hasImage && queryMatch;
   }).toList();
 }
 
@@ -1052,26 +905,4 @@ List<Scene> _relatedScenes(Scene scene, List<Scene> scenes) {
   }
 
   return scenes.where((item) => item.id != scene.id).take(4).toList();
-}
-
-String _sceneTitle(Scene scene) {
-  final description = scene.description?.trim();
-  if (description != null && description.isNotEmpty) {
-    return description;
-  }
-
-  return 'Selected frame';
-}
-
-String _filmMetaLine(Film? film) {
-  if (film == null) {
-    return 'Archive record waiting for a frame';
-  }
-
-  final year = film.releaseYear?.toString();
-  if (year == null || year.isEmpty) {
-    return 'Scene archive record';
-  }
-
-  return '$year · private visual reference';
 }

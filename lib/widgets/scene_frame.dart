@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:screenshots/theme/screenshot_colors.dart';
 import 'package:screenshots/theme/screenshot_spacing.dart';
+import 'package:screenshots/theme/screenshot_typography.dart';
 
 class SceneFrame extends StatelessWidget {
   const SceneFrame({
@@ -86,10 +87,9 @@ class SceneFrame extends StatelessWidget {
                         title!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: ScreenshotTypography.labelCaps.copyWith(
                           color: ScreenshotColors.onSurface,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0,
                         ),
                       ),
                     if (subtitle != null)
@@ -97,9 +97,10 @@ class SceneFrame extends StatelessWidget {
                         subtitle!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: ScreenshotTypography.metadata.copyWith(
                           color: ScreenshotColors.onSurfaceVariant,
                           fontSize: 10,
+                          letterSpacing: 0,
                         ),
                       ),
                   ],
