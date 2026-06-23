@@ -1,127 +1,62 @@
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:screenshots/features/auth/presentation/login_page.dart';
-import 'package:screenshots/features/home/presentation/home_page.dart';
-import 'package:screenshots/navigation/archive_page_route.dart';
 import 'package:screenshots/services/auth_service.dart';
-import 'package:screenshots/services/profile_service.dart';
 import 'package:screenshots/theme/screenshot_colors.dart';
 import 'package:screenshots/theme/screenshot_spacing.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class SignUpPage extends StatefulWidget {
-  const SignUpPage({super.key});
+class ForgotPasswordPage extends StatefulWidget {
+  const ForgotPasswordPage({super.key});
 
   @override
-  State<SignUpPage> createState() => _SignUpPageState();
+  State<ForgotPasswordPage> createState() => _ForgotPasswordPageState();
 }
 
-class _SignUpPageState extends State<SignUpPage> {
+class _ForgotPasswordPageState extends State<ForgotPasswordPage> {
   final AuthService _authService = const AuthService();
-  final ProfileService _profileService = const ProfileService();
-  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-
-  late final StreamSubscription<AuthState> _authStateSubscription;
 
   bool _isLoading = false;
-  String? _usernameError;
+  bool _isSuccess = false;
   String? _emailError;
-  String? _passwordError;
   String? _formError;
 
   @override
-  void initState() {
-    super.initState();
-    _authStateSubscription = _authService.onAuthStateChange.listen((data) {
-      if (data.event == AuthChangeEvent.signedIn && data.session != null) {
-        _handleSuccessfulLogin();
-      }
-    });
-  }
-
-  @override
   void dispose() {
-    _authStateSubscription.cancel();
-    _usernameController.dispose();
     _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleSuccessfulLogin() async {
-    if (!mounted) return;
-
-    // Automatically provision profile if it's their first time
-    await _profileService.ensureProfileExists();
-
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      ArchivePageRoute(builder: (_) => const HomePage()),
-      (_) => false,
-    );
-  }
-
   Future<void> _submit() async {
-    final username = _usernameController.text.trim();
     final email = _emailController.text.trim();
-    final password = _passwordController.text;
 
     setState(() {
-      _usernameError = username.isEmpty ? 'Username is required' : null;
       _emailError = email.isEmpty ? 'Email is required' : null;
-      _passwordError = password.isEmpty
-          ? 'Password is required'
-          : password.length < 6
-          ? 'Use at least 6 characters'
-          : null;
       _formError = null;
     });
 
-    if (_usernameError != null ||
-        _emailError != null ||
-        _passwordError != null) {
+    if (_emailError != null) {
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final response = await _authService.signUp(
-        email: email,
-        password: password,
-      );
-
-      if (!mounted) {
-        return;
+      await _authService.sendPasswordResetEmail(email);
+      if (mounted) {
+        setState(() {
+          _isSuccess = true;
+        });
       }
-
-      if (response.session != null) {
-        // Automatically handled by stream listener, but just in case
-        return;
-      }
-
-      Navigator.of(context).pushReplacement(
-        ArchivePageRoute(
-          builder: (_) => const LoginPage(
-            initialMessage:
-                'Account created. Check your email before entering the archive.',
-          ),
-        ),
-      );
     } on AuthException catch (error) {
-      setState(() {
-        _formError = error.message;
-        _isLoading = false;
-      });
+      setState(() => _formError = error.message);
     } catch (_) {
-      setState(() {
-        _formError = 'Unable to create an archive account.';
-        _isLoading = false;
-      });
+      setState(() => _formError = 'Unable to send reset instructions right now.');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -137,7 +72,7 @@ class _SignUpPageState extends State<SignUpPage> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final viewportHeight = constraints.maxHeight;
-          final panelHeight = math.max(540.0, viewportHeight * 0.65);
+          final panelHeight = math.max(480.0, viewportHeight * 0.60);
           final contentHeight = math.max(viewportHeight, panelHeight + 140);
 
           return SingleChildScrollView(
@@ -156,25 +91,22 @@ class _SignUpPageState extends State<SignUpPage> {
                       ),
                     ),
                     Positioned(
-                      top: viewportHeight * 0.13,
+                      top: viewportHeight * 0.15,
                       left: ScreenshotSpacing.mobileMargin,
                       right: ScreenshotSpacing.mobileMargin,
-                      child: const _SignUpHeader(),
+                      child: const _ForgotPasswordHeader(),
                     ),
                     Positioned(
                       left: 0,
                       right: 0,
                       bottom: 0,
                       height: panelHeight,
-                      child: _SignUpPanel(
-                        usernameController: _usernameController,
+                      child: _ForgotPasswordPanel(
                         emailController: _emailController,
-                        passwordController: _passwordController,
-                        usernameError: _usernameError,
                         emailError: _emailError,
-                        passwordError: _passwordError,
                         formError: _formError,
                         isLoading: _isLoading,
+                        isSuccess: _isSuccess,
                         onSubmit: _submit,
                         onGoToLogin: _goToLogin,
                       ),
@@ -208,9 +140,7 @@ class _BackArrowButton extends StatelessWidget {
           padding: EdgeInsets.zero,
           style: IconButton.styleFrom(
             foregroundColor: ScreenshotColors.onSurface,
-            disabledForegroundColor: ScreenshotColors.onSurface.withValues(
-              alpha: 0.45,
-            ),
+            disabledForegroundColor: ScreenshotColors.onSurface.withValues(alpha: 0.45),
             backgroundColor: ScreenshotColors.surfaceLow,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
@@ -224,15 +154,15 @@ class _BackArrowButton extends StatelessWidget {
   }
 }
 
-class _SignUpHeader extends StatelessWidget {
-  const _SignUpHeader();
+class _ForgotPasswordHeader extends StatelessWidget {
+  const _ForgotPasswordHeader();
 
   @override
   Widget build(BuildContext context) {
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: Text(
-        'Sign Up Here.',
+        'Forgot Password.',
         style: TextStyle(
           fontFamily: 'LibreBaskerville',
           fontSize: 48,
@@ -243,28 +173,22 @@ class _SignUpHeader extends StatelessWidget {
   }
 }
 
-class _SignUpPanel extends StatelessWidget {
-  const _SignUpPanel({
-    required this.usernameController,
+class _ForgotPasswordPanel extends StatelessWidget {
+  const _ForgotPasswordPanel({
     required this.emailController,
-    required this.passwordController,
-    required this.usernameError,
     required this.emailError,
-    required this.passwordError,
     required this.formError,
     required this.isLoading,
+    required this.isSuccess,
     required this.onSubmit,
     required this.onGoToLogin,
   });
 
-  final TextEditingController usernameController;
   final TextEditingController emailController;
-  final TextEditingController passwordController;
-  final String? usernameError;
   final String? emailError;
-  final String? passwordError;
   final String? formError;
   final bool isLoading;
+  final bool isSuccess;
   final VoidCallback onSubmit;
   final VoidCallback onGoToLogin;
 
@@ -287,62 +211,118 @@ class _SignUpPanel extends StatelessWidget {
         top: false,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(28, 32, 28, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _SignUpTextField(
-                controller: usernameController,
-                label: 'Username',
-                hintText: 'Your Username',
-                errorText: usernameError,
-                keyboardType: TextInputType.text,
-                textInputAction: TextInputAction.next,
-              ),
-              const SizedBox(height: 12),
-              _SignUpTextField(
-                controller: emailController,
-                label: 'Email',
-                hintText: 'Your Email',
-                errorText: emailError,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                autofillHints: const [AutofillHints.email],
-              ),
-              const SizedBox(height: 12),
-              _SignUpTextField(
-                controller: passwordController,
-                label: 'Password',
-                hintText: 'Create Your Password',
-                errorText: passwordError,
-                obscureText: true,
-                textInputAction: TextInputAction.done,
-                autofillHints: const [AutofillHints.newPassword],
-                onSubmitted: (_) => onSubmit(),
-              ),
-              if (formError != null) ...[
-                const SizedBox(height: 12),
-                _InlineFormWarning(text: formError!),
-              ],
-              const SizedBox(height: 24),
-              _SignUpButton(onPressed: onSubmit, isLoading: isLoading),
-              const SizedBox(height: 16),
-              _LoginPrompt(onPressed: isLoading ? null : onGoToLogin),
-              const SizedBox(height: 8),
-            ],
-          ),
+          child: isSuccess
+              ? _SuccessState(onGoToLogin: onGoToLogin)
+              : _FormState(
+                  emailController: emailController,
+                  emailError: emailError,
+                  formError: formError,
+                  isLoading: isLoading,
+                  onSubmit: onSubmit,
+                ),
         ),
       ),
     );
   }
 }
 
-class _SignUpTextField extends StatelessWidget {
-  const _SignUpTextField({
+class _FormState extends StatelessWidget {
+  const _FormState({
+    required this.emailController,
+    required this.emailError,
+    required this.formError,
+    required this.isLoading,
+    required this.onSubmit,
+  });
+
+  final TextEditingController emailController;
+  final String? emailError;
+  final String? formError;
+  final bool isLoading;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _EmailTextField(
+          controller: emailController,
+          label: 'Email',
+          hintText: 'Your Account Email',
+          errorText: emailError,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.done,
+          autofillHints: const [AutofillHints.email],
+          onSubmitted: (_) => onSubmit(),
+        ),
+        if (formError != null) ...[
+          const SizedBox(height: 12),
+          _InlineFormWarning(text: formError!),
+        ],
+        const SizedBox(height: 24),
+        _SendResetButton(onPressed: onSubmit, isLoading: isLoading),
+      ],
+    );
+  }
+}
+
+class _SuccessState extends StatelessWidget {
+  const _SuccessState({required this.onGoToLogin});
+
+  final VoidCallback onGoToLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.mark_email_read_rounded, size: 48, color: ScreenshotColors.primary),
+        const SizedBox(height: 24),
+        Text(
+          'Password reset instructions have been sent to your email.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'Satoshi',
+            fontSize: 16,
+            height: 1.5,
+            color: ScreenshotColors.onSurface,
+          ),
+        ),
+        const SizedBox(height: 32),
+        SizedBox(
+          width: double.infinity,
+          height: 52,
+          child: OutlinedButton(
+            onPressed: onGoToLogin,
+            style: OutlinedButton.styleFrom(
+              backgroundColor: ScreenshotColors.surfaceLow,
+              foregroundColor: ScreenshotColors.onSurface,
+              side: BorderSide(color: ScreenshotColors.outlineVariant, width: 1),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              textStyle: const TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w500,
+                fontSize: 16,
+              ),
+            ),
+            child: const Text('Back to Sign In'),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmailTextField extends StatelessWidget {
+  const _EmailTextField({
     required this.controller,
     required this.label,
     required this.hintText,
     this.errorText,
-    this.obscureText = false,
     this.keyboardType,
     this.textInputAction,
     this.autofillHints,
@@ -353,7 +333,6 @@ class _SignUpTextField extends StatelessWidget {
   final String label;
   final String hintText;
   final String? errorText;
-  final bool obscureText;
   final TextInputType? keyboardType;
   final TextInputAction? textInputAction;
   final Iterable<String>? autofillHints;
@@ -364,7 +343,10 @@ class _SignUpTextField extends StatelessWidget {
     final hasError = errorText != null;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide(color: ScreenshotColors.outlineVariant, width: 1),
+      borderSide: BorderSide(
+        color: ScreenshotColors.outlineVariant,
+        width: 1,
+      ),
     );
 
     return Semantics(
@@ -407,7 +389,6 @@ class _SignUpTextField extends StatelessWidget {
           const SizedBox(height: 6),
           TextField(
             controller: controller,
-            obscureText: obscureText,
             keyboardType: keyboardType,
             textInputAction: textInputAction,
             autofillHints: autofillHints,
@@ -440,9 +421,7 @@ class _SignUpTextField extends StatelessWidget {
                   : border,
               focusedBorder: border.copyWith(
                 borderSide: BorderSide(
-                  color: hasError
-                      ? ScreenshotColors.error
-                      : ScreenshotColors.onSurfaceVariant,
+                  color: hasError ? ScreenshotColors.error : ScreenshotColors.onSurfaceVariant,
                   width: 1.4,
                 ),
               ),
@@ -454,8 +433,8 @@ class _SignUpTextField extends StatelessWidget {
   }
 }
 
-class _SignUpButton extends StatelessWidget {
-  const _SignUpButton({required this.onPressed, required this.isLoading});
+class _SendResetButton extends StatelessWidget {
+  const _SendResetButton({required this.onPressed, required this.isLoading});
 
   final VoidCallback onPressed;
   final bool isLoading;
@@ -469,13 +448,9 @@ class _SignUpButton extends StatelessWidget {
         onPressed: isLoading ? null : onPressed,
         style: FilledButton.styleFrom(
           backgroundColor: ScreenshotColors.primary,
-          disabledBackgroundColor: ScreenshotColors.primary.withValues(
-            alpha: 0.34,
-          ),
+          disabledBackgroundColor: ScreenshotColors.primary.withValues(alpha: 0.34),
           foregroundColor: ScreenshotColors.onPrimary,
-          disabledForegroundColor: ScreenshotColors.onPrimary.withValues(
-            alpha: 0.56,
-          ),
+          disabledForegroundColor: ScreenshotColors.onPrimary.withValues(alpha: 0.56),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
           ),
@@ -494,7 +469,7 @@ class _SignUpButton extends StatelessWidget {
                   color: ScreenshotColors.onPrimary,
                 ),
               )
-            : const Text('Sign Up'),
+            : const Text('Send Reset Link'),
       ),
     );
   }
@@ -522,48 +497,6 @@ class _InlineFormWarning extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _LoginPrompt extends StatelessWidget {
-  const _LoginPrompt({required this.onPressed});
-
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(
-          'Already have an account? ',
-          style: TextStyle(
-            fontFamily: 'Satoshi',
-            fontSize: 14,
-            color: ScreenshotColors.onSurfaceVariant,
-          ),
-        ),
-        InkWell(
-          onTap: onPressed,
-          child: Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: Text(
-              'Sign In',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
-                color: ScreenshotColors.onSurface,
-                fontWeight: FontWeight.w700,
-                decoration: TextDecoration.underline,
-                decorationColor: ScreenshotColors.onSurface,
-                decorationThickness: 1.5,
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

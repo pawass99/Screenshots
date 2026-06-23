@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:screenshots/features/auth/presentation/forgot_password_page.dart';
+import 'package:screenshots/features/auth/presentation/reset_password_page.dart';
 import 'package:screenshots/features/auth/presentation/sign_up_page.dart';
 import 'package:screenshots/features/home/presentation/home_page.dart';
 import 'package:screenshots/navigation/archive_page_route.dart';
 import 'package:screenshots/services/auth_service.dart';
+import 'package:screenshots/services/profile_service.dart';
 import 'package:screenshots/theme/screenshot_colors.dart';
 import 'package:screenshots/theme/screenshot_spacing.dart';
-import 'package:screenshots/theme/screenshot_typography.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginPage extends StatefulWidget {
@@ -21,8 +24,11 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final AuthService _authService = const AuthService();
+  final ProfileService _profileService = const ProfileService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+  late final StreamSubscription<AuthState> _authStateSubscription;
 
   bool _isLoading = false;
   String? _emailError;
@@ -34,13 +40,37 @@ class _LoginPageState extends State<LoginPage> {
   void initState() {
     super.initState();
     _infoMessage = widget.initialMessage;
+    _authStateSubscription = _authService.onAuthStateChange.listen((data) {
+      if (data.event == AuthChangeEvent.passwordRecovery) {
+        Navigator.of(
+          context,
+        ).push(ArchivePageRoute(builder: (_) => const ResetPasswordPage()));
+      } else if (data.event == AuthChangeEvent.signedIn &&
+          data.session != null) {
+        _handleSuccessfulLogin();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _authStateSubscription.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleSuccessfulLogin() async {
+    if (!mounted) return;
+
+    // Automatically provision profile if it's their first time
+    await _profileService.ensureProfileExists();
+
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      ArchivePageRoute(builder: (_) => const HomePage()),
+      (_) => false,
+    );
   }
 
   Future<void> _submit() async {
@@ -62,23 +92,16 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       await _authService.signIn(email: email, password: password);
-
-      if (!mounted) {
-        return;
-      }
-
-      Navigator.of(context).pushAndRemoveUntil(
-        ArchivePageRoute(builder: (_) => const HomePage()),
-        (_) => false,
-      );
     } on AuthException catch (error) {
-      setState(() => _formError = error.message);
+      setState(() {
+        _formError = error.message;
+        _isLoading = false;
+      });
     } catch (_) {
-      setState(() => _formError = 'Unable to open the archive right now.');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      setState(() {
+        _formError = 'Unable to open the archive right now.';
+        _isLoading = false;
+      });
     }
   }
 
@@ -88,18 +111,23 @@ class _LoginPageState extends State<LoginPage> {
     ).push(ArchivePageRoute(builder: (_) => const SignUpPage()));
   }
 
+  void _goToForgotPassword() {
+    Navigator.of(
+      context,
+    ).push(ArchivePageRoute(builder: (_) => const ForgotPasswordPage()));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: ScreenshotColors.deepestSurface,
+      backgroundColor: ScreenshotColors.background,
       resizeToAvoidBottomInset: true,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final viewportHeight = constraints.maxHeight;
-          final panelHeight = math.max(600.0, viewportHeight * 0.57);
-          final contentHeight = math.max(viewportHeight, panelHeight + 330);
+          final panelHeight = math.max(480.0, viewportHeight * 0.60);
+          final contentHeight = math.max(viewportHeight, panelHeight + 140);
 
-          // Membuat container utama halaman sign in.
           return SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             child: ConstrainedBox(
@@ -108,14 +136,12 @@ class _LoginPageState extends State<LoginPage> {
                 height: contentHeight,
                 child: Stack(
                   children: [
-                    // Membuat header welcome pada area gelap.
                     Positioned(
-                      top: viewportHeight * 0.25,
+                      top: viewportHeight * 0.15,
                       left: ScreenshotSpacing.mobileMargin,
                       right: ScreenshotSpacing.mobileMargin,
                       child: const _WelcomeHeader(),
                     ),
-                    // Membuat panel utama form sign in.
                     Positioned(
                       left: 0,
                       right: 0,
@@ -131,6 +157,7 @@ class _LoginPageState extends State<LoginPage> {
                         isLoading: _isLoading,
                         onSubmit: _submit,
                         onGoToSignUp: _goToSignUp,
+                        onGoToForgotPassword: _goToForgotPassword,
                       ),
                     ),
                   ],
@@ -151,8 +178,14 @@ class _WelcomeHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return FittedBox(
       fit: BoxFit.scaleDown,
-      // Membuat teks welcome back sebagai header visual.
-      child: Text('Welcome Back!', style: ScreenshotTypography.signInWelcome),
+      child: Text(
+        'Sign In.',
+        style: TextStyle(
+          fontFamily: 'LibreBaskerville',
+          fontSize: 48,
+          color: ScreenshotColors.onSurface,
+        ),
+      ),
     );
   }
 }
@@ -168,6 +201,7 @@ class _SignInPanel extends StatelessWidget {
     required this.isLoading,
     required this.onSubmit,
     required this.onGoToSignUp,
+    required this.onGoToForgotPassword,
   });
 
   final TextEditingController emailController;
@@ -179,26 +213,30 @@ class _SignInPanel extends StatelessWidget {
   final bool isLoading;
   final VoidCallback onSubmit;
   final VoidCallback onGoToSignUp;
+  final VoidCallback onGoToForgotPassword;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: Color(0xFFD0D0D0),
-        borderRadius: BorderRadius.only(topLeft: Radius.circular(76)),
-        border: Border.fromBorderSide(
-          BorderSide(color: Color.fromARGB(255, 0, 0, 0), width: 1.4),
+      decoration: BoxDecoration(
+        color: ScreenshotColors.surface,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(34),
+          topRight: Radius.circular(34),
+        ),
+        border: Border(
+          top: BorderSide(color: ScreenshotColors.outlineVariant, width: 1),
+          left: BorderSide(color: ScreenshotColors.outlineVariant, width: 1),
+          right: BorderSide(color: ScreenshotColors.outlineVariant, width: 1),
         ),
       ),
       child: SafeArea(
         top: false,
-        // Membuat isi panel form sign in.
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(28, 52, 28, 30),
+          padding: const EdgeInsets.fromLTRB(28, 32, 28, 20),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Sign In', style: ScreenshotTypography.signInTitle),
-              const SizedBox(height: 52),
               if (infoMessage != null) ...[
                 _AuthMessage(text: infoMessage!, tone: _AuthMessageTone.info),
                 const SizedBox(height: ScreenshotSpacing.md),
@@ -212,7 +250,7 @@ class _SignInPanel extends StatelessWidget {
                 textInputAction: TextInputAction.next,
                 autofillHints: const [AutofillHints.email],
               ),
-              const SizedBox(height: 1),
+              const SizedBox(height: 12),
               _SignInTextField(
                 controller: passwordController,
                 label: 'Password',
@@ -223,16 +261,39 @@ class _SignInPanel extends StatelessWidget {
                 autofillHints: const [AutofillHints.password],
                 onSubmitted: (_) => onSubmit(),
               ),
-              const Spacer(),
-              // Membuat button login utama.
-              _SignInButton(onPressed: onSubmit, isLoading: isLoading),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerRight,
+                child: InkWell(
+                  onTap: isLoading ? null : onGoToForgotPassword,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 4.0,
+                      horizontal: 8.0,
+                    ),
+                    child: Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        fontFamily: 'Satoshi',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: ScreenshotColors.onSurfaceVariant,
+                        decoration: TextDecoration.underline,
+                        decorationColor: ScreenshotColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               if (formError != null) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 _InlineFormWarning(text: formError!),
               ],
-              const Spacer(),
-              // Membuat link menuju halaman sign up.
+              const SizedBox(height: 24),
+              _SignInButton(onPressed: onSubmit, isLoading: isLoading),
+              const SizedBox(height: 16),
               _SignUpPrompt(onPressed: isLoading ? null : onGoToSignUp),
+              const SizedBox(height: 8),
             ],
           ),
         ),
@@ -268,8 +329,8 @@ class _SignInTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasError = errorText != null;
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(20),
-      borderSide: BorderSide.none,
+      borderRadius: BorderRadius.circular(18),
+      borderSide: BorderSide(color: ScreenshotColors.outlineVariant, width: 1),
     );
 
     return Semantics(
@@ -278,28 +339,38 @@ class _SignInTextField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Membuat label dan warning field di luar container input.
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Row(
               children: [
-                Text(label, style: ScreenshotTypography.signInFieldLabel),
-                const Spacer(),
-                if (hasError)
-                  Text(
-                    errorText!,
-                    textAlign: TextAlign.right,
-                    style: ScreenshotTypography.signInFooter.copyWith(
-                      color: const Color(0xFF8C1D18),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                    ),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontFamily: 'Satoshi',
+                    fontSize: 14,
+                    color: ScreenshotColors.onSurfaceVariant,
                   ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: hasError
+                      ? Text(
+                          errorText!,
+                          textAlign: TextAlign.right,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontFamily: 'Satoshi',
+                            color: ScreenshotColors.error,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ],
             ),
           ),
           const SizedBox(height: 6),
-          // Membuat container input email atau password.
           TextField(
             controller: controller,
             obscureText: obscureText,
@@ -307,27 +378,37 @@ class _SignInTextField extends StatelessWidget {
             textInputAction: textInputAction,
             autofillHints: autofillHints,
             onSubmitted: onSubmitted,
-            cursorColor: Colors.black,
-            style: ScreenshotTypography.signInFieldInput,
+            cursorColor: ScreenshotColors.onSurface,
+            style: TextStyle(
+              fontFamily: 'Satoshi',
+              fontSize: 16,
+              color: ScreenshotColors.onSurface,
+            ),
             decoration: InputDecoration(
               hintText: hintText,
               filled: true,
-              fillColor: const Color(0xFFF2F2F2),
-              hintStyle: ScreenshotTypography.signInFieldHint,
-              contentPadding: const EdgeInsets.fromLTRB(24, 22, 24, 18),
-              constraints: const BoxConstraints(minHeight: 70),
+              fillColor: ScreenshotColors.surfaceLow,
+              hintStyle: TextStyle(
+                fontFamily: 'Satoshi',
+                fontSize: 16,
+                color: ScreenshotColors.outline,
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+              constraints: const BoxConstraints(minHeight: 60),
               border: border,
               enabledBorder: hasError
                   ? border.copyWith(
-                      borderSide: const BorderSide(
-                        color: Color(0xFF8C1D18),
+                      borderSide: BorderSide(
+                        color: ScreenshotColors.error,
                         width: 1.2,
                       ),
                     )
                   : border,
               focusedBorder: border.copyWith(
                 borderSide: BorderSide(
-                  color: hasError ? const Color(0xFF8C1D18) : Colors.black,
+                  color: hasError
+                      ? ScreenshotColors.error
+                      : ScreenshotColors.onSurfaceVariant,
                   width: 1.4,
                 ),
               ),
@@ -349,22 +430,26 @@ class _SignInButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 52,
       child: FilledButton(
         onPressed: isLoading ? null : onPressed,
         style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF111111),
-          disabledBackgroundColor: const Color(
-            0xFF111111,
-          ).withValues(alpha: 0.55),
-          foregroundColor: const Color(0xFFEDEDED),
-          disabledForegroundColor: const Color(
-            0xFFEDEDED,
-          ).withValues(alpha: 0.7),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+          backgroundColor: ScreenshotColors.primary,
+          disabledBackgroundColor: ScreenshotColors.primary.withValues(
+            alpha: 0.34,
           ),
-          textStyle: ScreenshotTypography.signInButton,
+          foregroundColor: ScreenshotColors.onPrimary,
+          disabledForegroundColor: ScreenshotColors.onPrimary.withValues(
+            alpha: 0.56,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          textStyle: const TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
         ),
         child: isLoading
             ? const SizedBox(
@@ -372,7 +457,7 @@ class _SignInButton extends StatelessWidget {
                 height: 22,
                 child: CircularProgressIndicator(
                   strokeWidth: 2.4,
-                  color: Color(0xFFEDEDED),
+                  color: ScreenshotColors.onPrimary,
                 ),
               )
             : const Text('Sign In'),
@@ -390,14 +475,14 @@ class _InlineFormWarning extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       liveRegion: true,
-      // Membuat warning credential di bawah button sign in.
       child: Align(
         alignment: Alignment.centerRight,
         child: Text(
           text,
           textAlign: TextAlign.right,
-          style: ScreenshotTypography.signInFooter.copyWith(
-            color: const Color(0xFF8C1D18),
+          style: TextStyle(
+            fontFamily: 'Satoshi',
+            color: ScreenshotColors.error,
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
@@ -419,21 +504,30 @@ class _SignUpPrompt extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Text(
-          "Don't have any account? ",
-          style: ScreenshotTypography.signInFooter,
+          "Don't have an account? ",
+          style: TextStyle(
+            fontFamily: 'Satoshi',
+            fontSize: 14,
+            color: ScreenshotColors.onSurfaceVariant,
+          ),
         ),
-        TextButton(
-          onPressed: onPressed,
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.black,
-            minimumSize: const Size(44, 44),
-            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            textStyle: ScreenshotTypography.signInFooter.copyWith(
-              fontWeight: FontWeight.w800,
+        InkWell(
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.all(4.0),
+            child: Text(
+              'Sign Up',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 14,
+                color: ScreenshotColors.onSurface,
+                fontWeight: FontWeight.w700,
+                decoration: TextDecoration.underline,
+                decorationColor: ScreenshotColors.onSurface,
+                decorationThickness: 1.5,
+              ),
             ),
           ),
-          child: const Text('Sign Up'),
         ),
       ],
     );
@@ -456,19 +550,24 @@ class _AuthMessage extends StatelessWidget {
       liveRegion: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0xFFF2F2F2),
+          color: ScreenshotColors.surfaceLow,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isError ? const Color(0xFF8C1D18) : const Color(0xFF8D8D8D),
+            color: isError
+                ? ScreenshotColors.error
+                : ScreenshotColors.outlineVariant,
           ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(ScreenshotSpacing.md),
           child: Text(
             text,
-            style: ScreenshotTypography.metadata.copyWith(
-              color: isError ? const Color(0xFF8C1D18) : Colors.black,
-              fontFamily: ScreenshotTypography.authBodyFamily,
+            style: TextStyle(
+              fontFamily: 'Satoshi',
+              color: isError
+                  ? ScreenshotColors.error
+                  : ScreenshotColors.onSurface,
+              fontSize: 14,
               letterSpacing: 0,
             ),
           ),
