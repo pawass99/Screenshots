@@ -9,10 +9,11 @@ import 'package:screenshots/widgets/archive_background.dart';
 import 'package:screenshots/widgets/archive_button.dart';
 import 'package:screenshots/widgets/archive_top_bar.dart';
 import 'package:screenshots/widgets/metadata_chip.dart';
+import 'package:screenshots/features/collections/presentation/save_to_collection_sheet.dart';
 import 'package:screenshots/features/share/widgets/scene_story_template.dart';
 import 'package:screenshots/services/instagram_story_share_service.dart';
 import 'package:screenshots/services/profile_service.dart';
-import 'package:screenshots/widgets/archive_scene_card.dart';
+import 'package:screenshots/widgets/scene_rail.dart';
 
 class SceneDetailPage extends StatefulWidget {
   const SceneDetailPage({
@@ -20,15 +21,19 @@ class SceneDetailPage extends StatefulWidget {
     required this.scene,
     required this.film,
     this.relatedScenes = const [],
+    this.onRelatedSceneTap,
     this.isSaved = false,
     this.onSavedChanged,
+    this.onCollectionChanged,
   });
 
   final Scene scene;
   final Film? film;
   final List<Scene> relatedScenes;
+  final ValueChanged<Scene>? onRelatedSceneTap;
   final bool isSaved;
   final ValueChanged<bool>? onSavedChanged;
+  final VoidCallback? onCollectionChanged;
 
   @override
   State<SceneDetailPage> createState() => _SceneDetailPageState();
@@ -43,9 +48,18 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
     _isSaved = widget.isSaved;
   }
 
-  void _toggleSaved() {
-    setState(() => _isSaved = !_isSaved);
-    widget.onSavedChanged?.call(_isSaved);
+  Future<void> _handleSaveToCollection() async {
+    final result = await showSaveToCollectionSheet(
+      context: context,
+      scene: widget.scene,
+      profileService: const ProfileService(),
+    );
+
+    if (result != null && mounted) {
+      setState(() => _isSaved = result.isSaved);
+      widget.onSavedChanged?.call(result.isSaved);
+      widget.onCollectionChanged?.call();
+    }
   }
 
   @override
@@ -63,7 +77,7 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
             slivers: [
               SliverToBoxAdapter(
                 child: ArchiveTopBar(
-                  title: 'Scene Record',
+                  title: '',
                   leading: ArchiveIconButton(
                     icon: Icons.arrow_back_ios_new_rounded,
                     semanticLabel: 'Back',
@@ -94,10 +108,16 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
                             label: _isSaved
                                 ? 'Saved in Collection'
                                 : 'Save to Collection',
-                            onPressed: _toggleSaved,
+                            onPressed: _handleSaveToCollection,
                             variant: _isSaved
                                 ? ArchiveButtonVariant.ghost
                                 : ArchiveButtonVariant.primary,
+                            textStyle: ScreenshotTypography.bodyMedium.copyWith(
+                              fontFamily: ScreenshotTypography.uiFamily,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: 0,
+                            ),
                           ),
                         ),
                       ],
@@ -105,7 +125,12 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
                     const SizedBox(height: ScreenshotSpacing.lg),
                     Text(
                       widget.film?.title ?? 'Scene Archive',
-                      style: ScreenshotTypography.metadata,
+                      style: ScreenshotTypography.metadata.copyWith(
+                        fontFamily: ScreenshotTypography.filmTitleFamily,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
                     ),
                     const SizedBox(height: ScreenshotSpacing.sm),
                     Text(
@@ -127,11 +152,11 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
                       ),
                     ],
                     if (widget.relatedScenes.isNotEmpty) ...[
-                      const _DetailSectionTitle(
-                        title: 'Related Scenes',
-                        meta: 'archive',
+                      const _DetailSectionTitle(title: 'Related Scenes'),
+                      _RelatedSceneList(
+                        scenes: widget.relatedScenes,
+                        onSceneTap: widget.onRelatedSceneTap,
                       ),
-                      _RelatedSceneList(scenes: widget.relatedScenes),
                     ],
                   ],
                 ),
@@ -145,25 +170,14 @@ class _SceneDetailPageState extends State<SceneDetailPage> {
 }
 
 class _RelatedSceneList extends StatelessWidget {
-  const _RelatedSceneList({required this.scenes});
+  const _RelatedSceneList({required this.scenes, this.onSceneTap});
 
   final List<Scene> scenes;
+  final ValueChanged<Scene>? onSceneTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: scenes.asMap().entries.map((entry) {
-        final isLast = entry.key == scenes.length - 1;
-
-        return Padding(
-          padding: EdgeInsets.only(bottom: isLast ? 0 : ScreenshotSpacing.md),
-          child: ArchiveSceneCard(
-            scene: entry.value,
-            semanticLabel: 'Related scene ${entry.key + 1}',
-          ),
-        );
-      }).toList(),
-    );
+    return SceneRail(scenes: scenes, onSceneTap: onSceneTap);
   }
 }
 
@@ -177,14 +191,8 @@ class _SceneHeroMedia extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final height = (width / 1.78).clamp(190.0, 260.0);
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(
-        color: ScreenshotColors.deepestSurface,
-        border: Border(
-          top: BorderSide(color: ScreenshotColors.outlineVariant),
-          bottom: BorderSide(color: ScreenshotColors.outlineVariant),
-        ),
-      ),
+    return ColoredBox(
+      color: ScreenshotColors.deepestSurface,
       child: SizedBox(
         width: double.infinity,
         height: height,
@@ -240,16 +248,13 @@ class _ShareButtonState extends State<_ShareButton> {
       avatarUrl = profile.avatarUrl;
     } catch (_) {
       // Ignore error and fall back to null avatar
-    } finally {
-      if (mounted) {
-        await _precacheStoryImages(avatarUrl);
-        if (!mounted) {
-          return;
-        }
-        setState(() => _isLoading = false);
-        _showStoryDialog(avatarUrl);
-      }
     }
+
+    if (!mounted) return;
+    await _precacheStoryImages(avatarUrl);
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    _showStoryDialog(avatarUrl);
   }
 
   Future<void> _precacheStoryImages(String? avatarUrl) async {
@@ -375,10 +380,9 @@ class _ShareButtonState extends State<_ShareButton> {
 }
 
 class _DetailSectionTitle extends StatelessWidget {
-  const _DetailSectionTitle({required this.title, required this.meta});
+  const _DetailSectionTitle({required this.title});
 
   final String title;
-  final String meta;
 
   @override
   Widget build(BuildContext context) {
@@ -394,11 +398,10 @@ class _DetailSectionTitle extends StatelessWidget {
             child: Text(
               title,
               style: ScreenshotTypography.archiveSectionTitle.copyWith(
-                fontSize: 23,
+                fontSize: 21,
               ),
             ),
           ),
-          Text(meta.toUpperCase(), style: ScreenshotTypography.labelCaps),
         ],
       ),
     );

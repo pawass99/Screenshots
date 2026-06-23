@@ -47,16 +47,10 @@ class ArchiveBottomNav extends StatelessWidget {
                 onTap: () => onChanged(1),
               ),
               _NavItem(
-                label: 'Saved',
-                icon: Icons.bookmark_border_rounded,
-                isActive: currentIndex == 2,
-                onTap: () => onChanged(2),
-              ),
-              _NavItem(
                 label: 'Profile',
                 icon: Icons.person_outline_rounded,
-                isActive: currentIndex == 3,
-                onTap: () => onChanged(3),
+                isActive: currentIndex == 2,
+                onTap: () => onChanged(2),
               ),
             ],
           ),
@@ -105,11 +99,13 @@ class _NavItem extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   label,
-                  style: ScreenshotTypography.metadata.copyWith(
+                  style: ScreenshotTypography.bodyMedium.copyWith(
                     color: isActive
                         ? ScreenshotColors.onSurface
                         : ScreenshotColors.outline,
+                    fontFamily: ScreenshotTypography.uiFamily,
                     fontSize: 10,
+                    fontWeight: FontWeight.w500,
                     letterSpacing: 0,
                   ),
                 ),

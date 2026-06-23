@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:screenshots/features/scene_detail/presentation/scene_detail_page.dart';
 import 'package:screenshots/models/film.dart';
 import 'package:screenshots/models/scene.dart';
@@ -8,17 +9,19 @@ import 'package:screenshots/theme/screenshot_colors.dart';
 import 'package:screenshots/theme/screenshot_spacing.dart';
 import 'package:screenshots/theme/screenshot_typography.dart';
 import 'package:screenshots/widgets/archive_background.dart';
-import 'package:screenshots/widgets/scene_frame.dart';
+import 'package:screenshots/widgets/scene_rail.dart';
 
 class MovieDetailPage extends StatelessWidget {
   const MovieDetailPage({
     super.key,
     required this.film,
     this.scenes = const [],
+    this.onCollectionChanged,
   });
 
   final Film film;
   final List<Scene> scenes;
+  final VoidCallback? onCollectionChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -53,36 +56,12 @@ class MovieDetailPage extends StatelessWidget {
                                 'No scene frames are connected to this movie yet.',
                               ),
                             )
-                          : SliverList.separated(
-                              itemCount: scenes.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(height: ScreenshotSpacing.md),
-                              itemBuilder: (context, index) {
-                                final scene = scenes[index];
-                                return SceneFrame(
-                                  imageUrl: scene.imageUrl,
-                                  title: scene.description ?? 'Selected frame',
-                                  subtitle: film.title,
-                                  aspectRatio: 1.72,
-                                  borderRadius: 24,
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      ArchivePageRoute(
-                                        builder: (_) => SceneDetailPage(
-                                          scene: scene,
-                                          film: film,
-                                          relatedScenes: scenes
-                                              .where(
-                                                (item) => item.id != scene.id,
-                                              )
-                                              .take(4)
-                                              .toList(),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                );
-                              },
+                          : SliverToBoxAdapter(
+                              child: SceneRail(
+                                scenes: scenes,
+                                onSceneTap: (scene) =>
+                                    _openScene(context, scene),
+                              ),
                             ),
                     ),
                     const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -91,6 +70,26 @@ class MovieDetailPage extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openScene(BuildContext context, Scene scene) {
+    final relatedScenes = scenes
+        .where((item) => item.id != scene.id)
+        .take(4)
+        .toList();
+
+    Navigator.of(context).push(
+      ArchivePageRoute(
+        builder: (_) => SceneDetailPage(
+          scene: scene,
+          film: film,
+          relatedScenes: relatedScenes,
+          onRelatedSceneTap: (relatedScene) =>
+              _openScene(context, relatedScene),
+          onCollectionChanged: onCollectionChanged,
         ),
       ),
     );
@@ -136,11 +135,11 @@ class _MovieDetailTopBar extends StatelessWidget {
                   ),
                 ),
               ),
-              Text(
-                'SCREENSHOT',
-                style: ScreenshotTypography.labelCaps.copyWith(
-                  color: ScreenshotColors.onSurfaceVariant,
-                ),
+              SvgPicture.asset(
+                'assets/images/screenshot_wordmark.svg',
+                width: 168,
+                height: 11,
+                semanticsLabel: 'SCREENSHOT',
               ),
             ],
           ),
@@ -405,7 +404,7 @@ class _SceneArchiveHeader extends StatelessWidget {
                 Text(
                   'Scene archive',
                   style: ScreenshotTypography.archiveSectionTitle.copyWith(
-                    fontSize: 27,
+                    fontSize: 24,
                     height: 1,
                   ),
                 ),

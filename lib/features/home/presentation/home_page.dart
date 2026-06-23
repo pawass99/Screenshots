@@ -15,9 +15,8 @@ import 'package:screenshots/theme/screenshot_typography.dart';
 import 'package:screenshots/widgets/archive_background.dart';
 import 'package:screenshots/widgets/archive_bottom_nav.dart';
 import 'package:screenshots/widgets/archive_search_box.dart';
-import 'package:screenshots/widgets/archive_scene_card.dart';
 import 'package:screenshots/widgets/archive_top_bar.dart';
-import 'package:screenshots/widgets/scene_frame.dart';
+import 'package:screenshots/widgets/scene_rail.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -30,10 +29,10 @@ class _HomePageState extends State<HomePage> {
   final FilmService _filmService = const FilmService();
   final SceneService _sceneService = const SceneService();
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _savedSearchController = TextEditingController();
 
   late Future<_HomeData> _homeFuture;
   int _tabIndex = 0;
+  int _collectionRevision = 0;
   final Set<String> _savedSceneIds = <String>{};
 
   @override
@@ -45,7 +44,6 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _searchController.dispose();
-    _savedSearchController.dispose();
     super.dispose();
   }
 
@@ -67,7 +65,11 @@ class _HomePageState extends State<HomePage> {
   void _openMovie(Film film, List<Scene> scenes) {
     Navigator.of(context).push(
       ArchivePageRoute(
-        builder: (_) => MovieDetailPage(film: film, scenes: scenes),
+        builder: (_) => MovieDetailPage(
+          film: film,
+          scenes: scenes,
+          onCollectionChanged: () => setState(() => _collectionRevision++),
+        ),
       ),
     );
   }
@@ -81,6 +83,7 @@ class _HomePageState extends State<HomePage> {
           scene: scene,
           film: data.filmForScene(scene),
           relatedScenes: related,
+          onRelatedSceneTap: (relatedScene) => _openScene(relatedScene, data),
           isSaved: _savedSceneIds.contains(scene.id),
           onSavedChanged: (isSaved) {
             setState(() {
@@ -91,6 +94,7 @@ class _HomePageState extends State<HomePage> {
               }
             });
           },
+          onCollectionChanged: () => setState(() => _collectionRevision++),
         ),
       ),
     );
@@ -133,19 +137,15 @@ class _HomePageState extends State<HomePage> {
                         data: data,
                         controller: _searchController,
                         onChanged: (_) => setState(() {}),
-                        onOpenScene: (scene) => _openScene(scene, data),
-                      ),
-                      _SavedPage(
-                        data: data,
-                        savedSceneIds: _effectiveSavedSceneIds(),
-                        controller: _savedSearchController,
-                        onChanged: (_) => setState(() {}),
+                        onOpenMovie: _openMovie,
                         onOpenScene: (scene) => _openScene(scene, data),
                       ),
                       ProfilePage(
                         films: data.films,
                         scenes: data.scenes,
                         savedCount: _effectiveSavedSceneIds().length,
+                        onOpenScene: (scene) => _openScene(scene, data),
+                        collectionRevision: _collectionRevision,
                       ),
                     ],
                   ),
@@ -245,19 +245,8 @@ class _DiscoveryPage extends StatelessWidget {
             padding: const EdgeInsets.symmetric(
               horizontal: ScreenshotSpacing.mobileMargin,
             ),
-            sliver: SliverList.separated(
-              itemCount: visibleScenes.length,
-              separatorBuilder: (_, _) =>
-                  const SizedBox(height: ScreenshotSpacing.md),
-              itemBuilder: (context, index) {
-                final scene = visibleScenes[index];
-
-                return ArchiveSceneCard(
-                  scene: scene,
-                  semanticLabel: 'Open scene ${index + 1}',
-                  onTap: () => onOpenScene(scene),
-                );
-              },
+            sliver: SliverToBoxAdapter(
+              child: SceneRail(scenes: visibleScenes, onSceneTap: onOpenScene),
             ),
           ),
         const SliverToBoxAdapter(child: SizedBox(height: 112)),
@@ -271,21 +260,32 @@ class _SearchPage extends StatelessWidget {
     required this.data,
     required this.controller,
     required this.onChanged,
+    required this.onOpenMovie,
     required this.onOpenScene,
   });
 
   final _HomeData data;
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
+  final void Function(Film film, List<Scene> scenes) onOpenMovie;
   final ValueChanged<Scene> onOpenScene;
 
   @override
   Widget build(BuildContext context) {
-    final results = _filterScenes(data.scenes, controller.text);
+    final query = controller.text.trim();
+    final sceneResults = _filterScenes(data.scenes, query);
+    final filmResults = _filterFilms(data.films, query);
 
     return CustomScrollView(
       slivers: [
-        const SliverToBoxAdapter(child: ArchiveTopBar(title: 'Search Archive')),
+        SliverToBoxAdapter(
+          child: ArchiveTopBar(
+            title: 'Search Archive',
+            titleStyle: ScreenshotTypography.archiveHeadline.copyWith(
+              fontSize: 23,
+            ),
+          ),
+        ),
         SliverPadding(
           padding: const EdgeInsets.symmetric(
             horizontal: ScreenshotSpacing.mobileMargin,
@@ -298,71 +298,22 @@ class _SearchPage extends StatelessWidget {
                 onChanged: onChanged,
                 autofocus: false,
               ),
-              const _ArchiveSectionTitle(
-                title: 'Scene Matches',
-                meta: 'Archive',
-              ),
-              if (results.isEmpty)
-                const _InlineArchiveMessage('No frame matches that search.')
-              else
-                _SceneFeed(scenes: results, onOpenScene: onOpenScene),
-            ],
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 112)),
-      ],
-    );
-  }
-}
-
-class _SavedPage extends StatelessWidget {
-  const _SavedPage({
-    required this.data,
-    required this.savedSceneIds,
-    required this.controller,
-    required this.onChanged,
-    required this.onOpenScene,
-  });
-
-  final _HomeData data;
-  final Set<String> savedSceneIds;
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-  final ValueChanged<Scene> onOpenScene;
-
-  @override
-  Widget build(BuildContext context) {
-    final saved = data.scenes
-        .where((scene) => savedSceneIds.contains(scene.id))
-        .toList();
-    final filtered = _filterScenes(saved, controller.text);
-
-    return CustomScrollView(
-      slivers: [
-        const SliverToBoxAdapter(
-          child: ArchiveTopBar(title: 'Your Collection'),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: ScreenshotSpacing.mobileMargin,
-          ),
-          sliver: SliverList.list(
-            children: [
-              ArchiveSearchBox(
-                controller: controller,
-                hintText: 'Filter by movie or tag',
-                onChanged: onChanged,
-              ),
-              const _ArchiveSectionTitle(
-                title: 'Saved Scenes',
-                meta: 'Private',
-              ),
-              if (filtered.isEmpty)
-                const _InlineArchiveMessage(
-                  'No saved scenes match that filter.',
-                )
-              else
-                _SavedMasonry(scenes: filtered, onOpenScene: onOpenScene),
+              if (query.isNotEmpty) ...[
+                const _ArchiveSectionTitle(title: 'Film Matches', meta: ''),
+                if (filmResults.isEmpty)
+                  const _InlineArchiveMessage('No movie matches that search.')
+                else
+                  _PosterRail(
+                    films: filmResults,
+                    onTap: (film) =>
+                        onOpenMovie(film, data.scenesForFilm(film)),
+                  ),
+                const _ArchiveSectionTitle(title: 'Scene Matches', meta: ''),
+                if (sceneResults.isEmpty)
+                  const _InlineArchiveMessage('No frame matches that search.')
+                else
+                  _SceneFeed(scenes: sceneResults, onOpenScene: onOpenScene),
+              ],
             ],
           ),
         ),
@@ -612,9 +563,11 @@ class _PosterCard extends StatelessWidget {
                   film.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: ScreenshotTypography.metadata.copyWith(
+                  style: ScreenshotTypography.bodyMedium.copyWith(
                     color: ScreenshotColors.onSurface,
+                    fontFamily: ScreenshotTypography.uiFamily,
                     fontSize: 12,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: 0,
                   ),
                 ),
@@ -635,76 +588,7 @@ class _SceneFeed extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: scenes
-          .map(
-            (scene) => Padding(
-              padding: const EdgeInsets.only(bottom: ScreenshotSpacing.md),
-              child: ArchiveSceneCard(
-                scene: scene,
-                onTap: () => onOpenScene(scene),
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-}
-
-class _SavedMasonry extends StatelessWidget {
-  const _SavedMasonry({required this.scenes, required this.onOpenScene});
-
-  final List<Scene> scenes;
-  final ValueChanged<Scene> onOpenScene;
-
-  @override
-  Widget build(BuildContext context) {
-    final left = <Scene>[];
-    final right = <Scene>[];
-    for (var i = 0; i < scenes.length; i += 1) {
-      (i.isEven ? left : right).add(scenes[i]);
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: _SavedColumn(scenes: left, onOpenScene: onOpenScene),
-        ),
-        const SizedBox(width: ScreenshotSpacing.sm),
-        Expanded(
-          child: _SavedColumn(scenes: right, onOpenScene: onOpenScene),
-        ),
-      ],
-    );
-  }
-}
-
-class _SavedColumn extends StatelessWidget {
-  const _SavedColumn({required this.scenes, required this.onOpenScene});
-
-  final List<Scene> scenes;
-  final ValueChanged<Scene> onOpenScene;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: scenes
-          .asMap()
-          .entries
-          .map(
-            (entry) => Padding(
-              padding: const EdgeInsets.only(bottom: ScreenshotSpacing.sm),
-              child: SceneFrame(
-                imageUrl: entry.value.imageUrl,
-                aspectRatio: entry.key.isEven ? 0.78 : 0.92,
-                borderRadius: 16,
-                onTap: () => onOpenScene(entry.value),
-              ),
-            ),
-          )
-          .toList(),
-    );
+    return SceneRail(scenes: scenes, onSceneTap: onOpenScene);
   }
 }
 
@@ -728,7 +612,7 @@ class _ArchiveSectionTitle extends StatelessWidget {
             child: Text(
               title,
               style: ScreenshotTypography.archiveSectionTitle.copyWith(
-                fontSize: 23,
+                fontSize: 21,
                 height: 1,
               ),
             ),
@@ -895,14 +779,28 @@ List<Scene> _filterScenes(List<Scene> scenes, String query) {
   }).toList();
 }
 
-List<Scene> _relatedScenes(Scene scene, List<Scene> scenes) {
-  final related = scenes
-      .where((item) => item.id != scene.id && item.filmId == scene.filmId)
-      .toList();
-
-  if (related.isNotEmpty) {
-    return related.take(4).toList();
+List<Film> _filterFilms(List<Film> films, String query) {
+  final normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery.isEmpty) {
+    return const [];
   }
 
-  return scenes.where((item) => item.id != scene.id).take(4).toList();
+  return films
+      .where((film) => film.title.toLowerCase().contains(normalizedQuery))
+      .toList();
+}
+
+List<Scene> _relatedScenes(Scene scene, List<Scene> scenes) {
+  final sameFilm = scenes
+      .where((item) => item.id != scene.id && item.filmId == scene.filmId)
+      .toList();
+  final sceneTags = scene.tags.map((tag) => tag.toLowerCase()).toSet();
+  final sharedTags = scenes.where((item) {
+    if (item.id == scene.id || item.filmId == scene.filmId) {
+      return false;
+    }
+    return item.tags.any((tag) => sceneTags.contains(tag.toLowerCase()));
+  });
+
+  return [...sameFilm, ...sharedTags].take(4).toList();
 }

@@ -9,11 +9,13 @@ class ArchiveTopBar extends StatelessWidget {
     required this.title,
     this.leading,
     this.trailing,
+    this.titleStyle,
   });
 
   final String title;
   final Widget? leading;
   final Widget? trailing;
+  final TextStyle? titleStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -39,7 +41,7 @@ class ArchiveTopBar extends StatelessWidget {
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: ScreenshotTypography.archiveHeadline,
+                style: titleStyle ?? ScreenshotTypography.archiveHeadline,
               ),
             ),
             ...(trailing == null ? const <Widget>[] : [trailing!]),

@@ -12,12 +12,14 @@ class ArchiveButton extends StatelessWidget {
     required this.onPressed,
     this.isLoading = false,
     this.variant = ArchiveButtonVariant.primary,
+    this.textStyle,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool isLoading;
   final ArchiveButtonVariant variant;
+  final TextStyle? textStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +52,7 @@ class ArchiveButton extends StatelessWidget {
                   ? BorderSide.none
                   : const BorderSide(color: ScreenshotColors.outlineVariant),
             ),
-            textStyle: ScreenshotTypography.labelCaps,
+            textStyle: textStyle ?? ScreenshotTypography.labelCaps,
           ),
           child: isLoading
               ? const SizedBox(

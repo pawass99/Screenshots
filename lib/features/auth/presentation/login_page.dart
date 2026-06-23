@@ -41,6 +41,7 @@ class _LoginPageState extends State<LoginPage> {
     super.initState();
     _infoMessage = widget.initialMessage;
     _authStateSubscription = _authService.onAuthStateChange.listen((data) {
+      if (!mounted) return;
       if (data.event == AuthChangeEvent.passwordRecovery) {
         Navigator.of(
           context,

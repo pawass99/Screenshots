@@ -11,7 +11,7 @@ class ArchiveSceneCard extends StatelessWidget {
   });
 
   static const aspectRatio = 1.72;
-  static const borderRadius = 24.0;
+  static const borderRadius = 18.0;
 
   final Scene scene;
   final VoidCallback? onTap;
